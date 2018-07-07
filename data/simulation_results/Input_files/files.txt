@@ -1,0 +1,18 @@
+Butte Creek Spring-Run Chinook Salmon Test
+flows.dat
+Stream.dat
+Spawn.dat
+Species.dat
+Relation.dat
+temps.dat
+Wua.dat
+Suplment2.dat
+control.dat
+Sink.out
+Stats.out
+Trans.out
+summary.out
+Hab.tmp
+move.tmp
+SV.tmp
+Butte Creek Data Set Notes.Rtf

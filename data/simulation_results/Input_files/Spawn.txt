@@ -1,0 +1,13 @@
+Chinook Salmon   ;species name
+2.7              ;avg. area per redd mound (m^2) per Butte and Big Chico Creeks Spring-run Chinook Salmon, Onchorhynchus tshawytsha Life History Investigation 2003-2004     CM
+2.2 18.9         ;min-max spawn temperatures(C) composite temp range by McCullough 1999 - EPA report     CM
+.245             ;avg. wt(g) of embryos on emergence for ~30 mm Beer and Anderson 2001    CM
+16               ;beginning spawn time step within year
+   0.0075;   .05         ;15-Oct spawn distribution (fraction spawn in each time step) 
+   0.03375;  .10         ;22-Oct 
+   0.2075;   .36         ;29-Oct
+   0.46375;  .36         ; 5-Nov
+   0.2125;   .10         ;12-Nov
+   0.0575;   .03         ;19-Nov
+   0.015                 ;The above dates no longer agree with water year start date
+   0.0025

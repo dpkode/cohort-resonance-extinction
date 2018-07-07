@@ -1,0 +1,21 @@
+; Options for Chinook Salmon dataset     CM
+Timesteps=4645;      CM
+Date=05/25/2010; = Week 23, 2010, week 0      CM
+Capacity=Numbers    ;       CM
+Population=Anadromous;              CM
+Model=Escapement;
+; Processes
+; Standard deviation of emergent fry from Power and Power (1994)
+Graduate /Stage='Eggs/Embryos' /InitDev=4;
+Supplement;
+Carry /Time=16,25;        This may need to be changed if simulation start date is moved to Spring or Summer as I am considering doing   CM
+Spawn /Time=16,25 /SI=Avoidance;        This may need to be changed for same reason as above    CM
+; Don't let freshet and seasonal movement overlap in time
+;Freshet Movement /Stage=Fry, Parr0, Parr1 /Option=2xPandA
+Seasonal Movement /Time=27,52 /Stage=Fry,Parr0,Parr1;       
+Biomass computation;
+Habitat Movement /Stage=Adult Females /Move=Down080
+;Habitat Movement /Time=1,52 /Stage=Fry /Class=F1 /Move=Down090;  Changed to reflect info from G&M p 336  CM
+Mortality /InVivo=16,25; Applies to in-stream fish only
+Immigration /Stage=Fry,0+Parr,1+Parr;
+Growth /Stage='Eggs/Embryos','Fry', 'Parr0'; Moving fry and parr do not grow     ??Is this appropriate, I let them for now CM
