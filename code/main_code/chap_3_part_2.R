@@ -4,7 +4,7 @@
 # make sure we start with a clean slate: clear all objects from current environment
 rm(list = ls()) 
 # functions for conducting chap 3 analysis
-source("./code/functions.R")
+source("./code_ms/functions.R")
 
 # Load packages
 library(ggplot2)
@@ -124,7 +124,7 @@ parSimCmp <- function(dt, simLen = 1024, survMean) {
                                                   surv3 = surv3, 
                                                   EQsp = m, 
                                                   wanted_frac = wanted_frac,
-                                                  alpha_scale = l)[[2]])[,3]), with = FALSE]
+                                                  alpha_scale = l)[[2]])[,3])]
         }
       }
     }

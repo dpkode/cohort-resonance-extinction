@@ -79,9 +79,9 @@ calc_beta <-function(alpha, EQsp, spr) {
   # To calculate beta for multiple alpha values, just pass a vecter of alphas
   # to the alpha argument
   #if (length(EQsp) == 1 & all(EQsp == "infinity"))  beta <- 0 else beta <- (alpha * spr - 1)/EQsp
-  beta <- (alpha * spr - 1)/EQsp
   
-  if (any(beta < 0)) warning("beta is negative, that's not good - population parameters not sustainable?.?.?")
+  beta <- (alpha * spr - 1)/EQsp
+  if (any(beta < 0)) warning("beta value(s) is (are) negative - must be positive")
   return(beta)
 }
 
@@ -1404,6 +1404,14 @@ mk_white <- function(N) {
   return(rep(1/N, N/2))
 }
 
+mk_1_over_f_beta <- function(N, beta) {
+  # white <- rep(1/N, )
+  fs <- seq(0, 0.5, length.out = (N/2))
+  fs[1] <- 0.0001 # avoid infinity 
+  one_over_fb <- 1/fs^beta
+  return(one_over_fb)
+}
+
 # create "band-pass" style time series
 mk_rsin <- function(N, lowF, highF) {
   temp <- (1:(N/2))/(N)
@@ -1506,14 +1514,10 @@ popSimPSvary <- function(rand_surv, surv1, surv2, surv3, EQsp, wanted_frac, alph
 } # end of popSimPSvary()
 
 PopProjPSvar <- function(survPS, surv1, surv2, surv3, EQsp, wanted_frac, alpha_scale) {
-  # This function projects model BC spring run chinook salmon (females) populations with either constant 
-  # or variable survival for a !single run!
-  
-  # USe popSimPSvary() to run multiple simulations and collect output for analysis
-  
-  # PopProjPSvar() runs a single stochasitic run of the population model with time varying survPS
-  # for this specified model parameters: surv1, surv2, surv3, EQsp, wanted_frac, alpha_scale
-  
+  # A density dependent (Beverton-Holt), age-structure populaiton model
+  # based on previous Botsford lab work (e.g., Worden et al. 2010, ) and modified 
+  # based on demographic characteristics of Butte Creek Spring Run Chinook salmon 
+  # 
   # survPS = either constant or variable 
   # surv1, surv2 and surv3 = constant. surv1 ~ early ocean survival (0.01-0.05). surv2 == surv3 (0.8 high)
   # EQsp = the number of age-3 and age-4 females returning to spawn in Butte Creek, susceptible to prespawning 
@@ -1521,6 +1525,12 @@ PopProjPSvar <- function(survPS, surv1, surv2, surv3, EQsp, wanted_frac, alpha_s
   # wanted_frac = the ratio of age-3 spawners to total spawners (age-3 + age-4), used to determine the fraction 
   # of age-3 fish in the ocean returning to spawn each year
   # alpha_scale = a multiplier of the 1/spr to get the slope of the Beverton-Holt stock recruitment curve
+  #
+  # Use popSimPSvary() to run multiple simulations and collect output for analysis
+  
+  # PopProjPSvar() runs a single stochasitic run of the population model with time varying survPS
+  # for this specified model parameters: surv1, surv2, surv3, EQsp, wanted_frac, alpha_scale
+  
   
   # May 20: check that function arguments are of length == 1
   if ( length(surv1) != 1 | length(surv2) != 1 | length(surv3) != 1 | 
@@ -1531,7 +1541,6 @@ PopProjPSvar <- function(survPS, surv1, surv2, surv3, EQsp, wanted_frac, alpha_s
   delta_e <- calc_de(wanted_frac, surv3)
   # assuming survPS = 1 produces maximum spr, 
   # hence least steep replacement line
-  # use mean(survPS, na.rm = ...)
   if (length(survPS) > 1) { 
     spr <- SPR_srcs(surv1, surv2, surv3, delta_e, survPS=1) 
   } else {
@@ -1595,6 +1604,45 @@ PopProjPSvar <- function(survPS, surv1, surv2, surv3, EQsp, wanted_frac, alpha_s
   return(list(pop = pop, sp = sp))
   
 } # end PopProjPSvar()
+
+
+scale_surv_dat <- function(dat,
+                           surv_mean,
+                           surv_range) {
+  # scale noise series to specified mean and range
+  # shift to min of 0
+  min_dat <- apply(dat, 2, min)
+  shift_dat <- sapply( 1:ncol(dat), function(x) dat[,x] + (-1*min_dat[x]) )
+  # scale to max of 1
+  max_dat <- apply(shift_dat, 2, max)
+  dat_01 <- sapply(1:ncol(shift_dat), function(x) shift_dat[,x]/max_dat[x])
+  # scale and shift to specified mean and range
+  out_dat <- (surv_mean/2) + (dat_01 * surv_range)
+  return(out_dat)
+}
+
+# out <- make_surv_mat(noise_dat = noiseList[[1]], 
+#               mean_surv = 0.5, 
+#               range_surv = 0.4)
+# dim(out)
+# class(out)
+
+make_surv_mat <- function(noise_dat, 
+                          mean_surv, 
+                          range_surv,
+                          sim_len = 1024) {
+  # n_noise <- length(noise_dat)
+  # surv_list <- vector("list", length = n_noise)
+  # for (i in 1:n_noise) {
+    surv <- scale_surv_dat(dat = noise_dat,
+                           surv_mean = mean_surv,
+                           surv_range = range_surv)
+    surv[surv > 1] <- 1
+    surv[surv < 0] <- 0
+  #   surv_list[[i]] <- surv
+  # }
+  return(surv)
+}
 
 ##### beta distribution approach #####
 
@@ -2094,417 +2142,327 @@ wt_plot_GWPS <- function(biwv_obj, labs = TRUE, small = TRUE) {
   par(vold)
 }
 
-summaryCh3tsPlot <- function(noise = noiseList, fish = spawners, n = 1) {
+plot_gen_freq_wvlt <- function(noise = noiseList, n = 1, J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
   
-  library(biwavelet)
-  
-  ylim = c(0,2)
+  ylim <- c(0,2)
   lwd_ts <- 1.5
-  J1 <- trunc((log(32/(2 * 1))/log(2))/0.01)
+  n_rows <- 1:200
   
-  # pdf()
-  old <- par(mar = c(1,2,1,1), cex = .7)
-  
+  old <- par(mar = c(2,2,1,1), cex = .7)
   # white noise
+  # Label
+  print("white")
+  par(fig=c(0, 0.33, 0.80, 1))
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "White noise", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.2, 0.9, 1))
+  par(fig=c(0.33, 0.66, 0.80, 1), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
   
-  # time series plot
-  par(fig=c(0.20, 0.40, 0.9, 1), new = TRUE)
-  plot(1:nrow(noiseList[[1]]), noiseList[[1]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
   # plot wavelet power spectrum
-  par(fig=c(0.40, 0.6, 0.9, 1), new = TRUE)
-  white.wt <- wt(cbind(1:nrow(noiseList[[1]]), noiseList[[1]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(white.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.9, 1), new = TRUE)
-  plot(1:nrow(spawners), spawners[,white], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.9, 1), new = TRUE)
-  white.wt <- wt(cbind(1:nrow(spawners), spawners[,white]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.66, 1, 0.80, 1), new = TRUE)
+  white.wt <- wt(cbind(n_rows, noiseList[[1]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(white.wt)
   
   # Bandpass period 3-4
+  # label
+  print("cohort")
+  par(fig=c(0, 0.33, 0.60, 0.80), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Period 3-4", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.2, 0.8, 0.9), new = TRUE)
+  par(fig=c(0.33, 0.66, 0.60, 0.80), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.8, 0.9), new = TRUE)
-  plot(1:nrow(noiseList[[2]]), noiseList[[2]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
   # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.8, 0.9), new = TRUE)
-  p34.wt <- wt(cbind(1:nrow(noiseList[[2]]), noiseList[[2]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.66, 1, 0.60, 0.80), new = TRUE)
+  p34.wt <- wt(cbind(n_rows, noiseList[[2]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.8, 0.9), new = TRUE)
-  plot(1:nrow(spawners), spawners[,p34], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.8, 0.9), new = TRUE)
-  p34.wt <- wt(cbind(1:nrow(spawners), spawners[,p34]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(p34.wt)
-  
-  # Band reject period 3-4
-  # Generating spectrum
-  par(fig=c(0, 0.2, 0.7, 0.8), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.7, 0.8), new = TRUE)
-  plot(1:nrow(noiseList[[3]]), noiseList[[3]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.7, 0.8), new = TRUE)
-  pNo34.wt <- wt(cbind(1:nrow(noiseList[[3]]), noiseList[[3]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pNo34.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.7, 0.8), new = TRUE)
-  plot(1:nrow(spawners), spawners[,pNo34], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.7, 0.8), new = TRUE)
-  pNo34.wt <- wt(cbind(1:nrow(spawners), spawners[,pNo34]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pNo34.wt)
-  
-  
-  # Bandpass greater than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.2, 0.6, 0.7), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.6, 0.7), new = TRUE)
-  plot(1:nrow(noiseList[[4]]), noiseList[[4]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.6, 0.7), new = TRUE)
-  pgt4.wt <- wt(cbind(1:nrow(noiseList[[4]]), noiseList[[4]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.6, 0.7), new = TRUE)
-  plot(1:nrow(spawners), spawners[,pgt3], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.6, 0.7), new = TRUE)
-  pgt4.wt <- wt(cbind(1:nrow(spawners), spawners[,pgt3]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.2, 0.5, 0.6), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.5, 0.6), new = TRUE)
-  plot(1:nrow(noiseList[[5]]), noiseList[[5]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.5, 0.6), new = TRUE)
-  plt4.wt <- wt(cbind(1:nrow(noiseList[[5]]), noiseList[[5]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt4.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.5, 0.6), new = TRUE)
-  plot(1:nrow(spawners), spawners[,plt4], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.5, 0.6), new = TRUE)
-  plt4.wt <- wt(cbind(1:nrow(spawners), spawners[,plt4]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt4.wt)
-  
-  # Bandpass greater than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.2, 0.4, 0.5), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.4, 0.5), new = TRUE)
-  plot(1:nrow(noiseList[[6]]), noiseList[[6]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.4, 0.5), new = TRUE)
-  pgt4.wt <- wt(cbind(1:nrow(noiseList[[6]]), noiseList[[6]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.4, 0.5), new = TRUE)
-  plot(1:nrow(spawners), spawners[,pgt4], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.4, 0.5), new = TRUE)
-  plgt4.wt <- wt(cbind(1:nrow(spawners), spawners[,pgt4]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.2, 0.3, 0.4), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.25, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.3, 0.4), new = TRUE)
-  plot(1:nrow(noiseList[[7]]), noiseList[[7]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.3, 0.4), new = TRUE)
-  plt3.wt <- wt(cbind(1:nrow(noiseList[[7]]), noiseList[[7]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt3.wt)
-  
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.3, 0.4), new = TRUE)
-  plot(1:nrow(spawners), spawners[,plt3], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.3, 0.4), new = TRUE)
-  plt3.wt <- wt(cbind(1:nrow(spawners), spawners[,plt3]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt3.wt)
-  
   
   # Bandpass greater than period 10
+  # label
+  print("low")
+  par(fig=c(0, 0.33, 0.40, 0.60), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Low Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.2, 0.2, 0.3), new = TRUE)
+  par(fig=c(0.33, 0.66, 0.40, 0.60), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
   
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.2, 0.3), new = TRUE)
-  plot(1:nrow(noiseList[[8]]), noiseList[[8]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
   # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.2, 0.3), new = TRUE)
-  pgt10.wt <- wt(cbind(1:nrow(noiseList[[8]]), noiseList[[8]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.66, 1, 0.40, 0.60), new = TRUE)
+  pgt10.wt <- wt(cbind(n_rows, noiseList[[3]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(pgt10.wt)
   
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.2, 0.3), new = TRUE)
-  plot(1:nrow(spawners), spawners[,pgt10], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.2, 0.3), new = TRUE)
-  pgt10.wt <- wt(cbind(1:nrow(spawners), spawners[,pgt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt10.wt)
   
   # Bandpass greater than period 10 and period 3-4
+  # label
+  print("both")
+  par(fig=c(0, 0.33, 0.2, 0.4), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Both Cohort and\nLow Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.2, 0.1, 0.2), new = TRUE)
+  par(fig=c(0.33, 0.66, 0.2, 0.4), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
-  # time series plot
-  par(fig=c(0.2, 0.4, 0.1, 0.2), new = TRUE)
-  plot(1:nrow(noiseList[[9]]), noiseList[[9]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  # plot wavelet power spectrum
+  par(fig=c(0.66, 1, 0.2, 0.4), new = TRUE)
+  p34gt10.wt <- wt(cbind(n_rows, noiseList[[4]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p34gt10.wt)
+  
+  # one over f noise (beta = 1)
+  # label
+  print("1/f^b")
+  par(fig=c(0, 0.33, 0, 0.2), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  
+  # Generating spectrum
+  par(fig=c(0.33, 0.66, 0, 0.2), new = TRUE)
+  Ns <- 50
+  xs <- seq(0,0.5, length = Ns)
+  ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
+  scaled_ys <- 2 * (ys / max(ys[-1]))
+  plot(x = xs[-1], y = scaled_ys[-1], type = "l",
+       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
+       xaxs = "i", yaxs = "i")
+  polygon(c(xs[-1],rev(xs[-1])),
+          c(rep(0, length = Ns-1), rev(scaled_ys[-1])),
+          col="gray")
   
   # plot wavelet power spectrum
-  par(fig=c(0.4, 0.6, 0.1, 0.2), new = TRUE)
-  p34gt10.wt <- wt(cbind(1:nrow(noiseList[[9]]), noiseList[[9]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(p34gt10.wt)
+  par(fig=c(0.66, 1, 0, 0.2), new = TRUE)
+  p_one_over_f.wt <- wt(cbind(n_rows, noiseList[[5]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p_one_over_f.wt)
   
-  # plot spawner abundance time series
-  par(fig=c(0.6, 0.8, 0.1, 0.2), new = TRUE)
-  plot(1:nrow(spawners), spawners[,p34gt10], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum of spawner abundance
-  par(fig=c(0.8, 1.0, 0.1, 0.2), new = TRUE)
-  p34gt10.wt <- wt(cbind(1:nrow(spawners), spawners[,p34gt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(p34gt10.wt)
   
   par(old)
   
-} # end summaryCh3tsPlot
+} # end plot_gen_freq_wvlt
 
-summaryCh3tsPlotNoise <- function(noise = noiseList, n = 1, J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
+plot_surv_spawn_ts <- function(spawners = storage, 
+                               noise = noiseList,
+                               meanSurv = 0.5,
+                               rangeSurv = 0.4, 
+                               n = 1, 
+                               J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
   
-  library(biwavelet)
+  spPlot <- copy(spawners[ i = N > 400 & reps_c == 1 & survRange_c == rangeSurv & meanPS_c == meanSurv ])
   
-  ylim = c(0,2)
+  out <- vector("list", length = length(noise))
+  for (i in 1:length(noise)) {
+    out[[i]] <- make_surv_mat(noise_dat = noise[[i]], 
+                              mean_surv = meanSurv,
+                              range_surv = rangeSurv,
+                              sim_len = 1024)
+  }
+  
+  sp_ylim <- c(0, 4000)
+  s_yim <- c(0, 1)
   lwd_ts <- 1.5
+  n_rows <- 1:200
+  qeT <- 100
   
   old <- par(mar = c(1,2,1,1), cex = .7)
   
   # white noise
+  # Label
+  print("white")
+  par(fig=c(0, 0.20, 0.80, 1))
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "White noise", cex = 1)
+  
+  # time series plot: survival 
+  par(fig=c(0.20, 0.60, 0.80, 1), new = TRUE)
+  plot(n_rows, out[[1]][n_rows, 1], type = "l", col = "grey20", lwd = lwd_ts, 
+       ylim = s_yim, xlab = "Time (years)", ylab = "")
+  
+  # time series plot: spawners 
+  par(fig=c(0.60, 1, 0.80, 1), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+  abline(h = qeT, col = "black", lty = 2)
+  
+  # Bandpass period 3-4
+  # label
+  print("cohort")
+  par(fig=c(0, 0.20, 0.6, 0.8), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Period 3-4", cex = 1)
+  
+  # time series plot: survival 
+  par(fig=c(0.20, 0.60, 0.6, 0.8), new = TRUE)
+  plot(n_rows, out[[2]][n_rows, 1], type = "l", col = "grey20", lwd = lwd_ts, 
+       ylim = s_yim, xlab = "Time (years)", ylab = "")
+  
+  # time series plot: spawners
+  par(fig=c(0.6, 1, 0.6, 0.8), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+  abline(h = qeT, col = "black", lty = 2)
+  
+  # Bandpass greater than period 10
+  # label
+  print("low")
+  par(fig=c(0, 0.2, 0.4, 0.6), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Low Frequency", cex = 1)
+  
+  # time series plot: survival 
+  par(fig=c(0.20, 0.60, 0.4, 0.6), new = TRUE)
+  plot(n_rows, out[[3]][n_rows, 1], type = "l", col = "grey20", lwd = lwd_ts, 
+       ylim = s_yim, xlab = "Time (years)", ylab = "")
+  
+  # time series plot: spawners
+  par(fig=c(0.6, 1, 0.4, 0.6), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+  abline(h = qeT, col = "black", lty = 2)
+  
+  # Bandpass greater than period 10 and period 3-4
+  # label
+  print("both")
+  par(fig=c(0, 0.2, 0.2, 0.4), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Both Cohort and\nLow Frequency", cex = 1)
+  
+  # time series plot: survival 
+  par(fig=c(0.20, 0.60, 0.2, 0.4), new = TRUE)
+  plot(n_rows, out[[4]][n_rows, 1], type = "l", col = "grey20", lwd = lwd_ts, 
+       ylim = s_yim, xlab = "Time (years)", ylab = "")
+  
+  # time series plot: spawners
+  par(fig=c(0.6, 1, 0.2, 0.4), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+  abline(h = qeT, col = "black", lty = 2)
+  
+  # one over f noise (beta = 1)
+  # label
+  print("1/f^b")
+  par(fig=c(0, 0.2, 0, 0.2), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  
+  # time series plot: survival 
+  par(fig=c(0.20, 0.60, 0, 0.2), new = TRUE)
+  plot(n_rows, out[[5]][n_rows, 1], type = "l", col = "grey20", lwd = lwd_ts, 
+       ylim = s_yim, xlab = "Time (years)", ylab = "")
+  
+  # time series plot: spawners
+  par(fig=c(0.6, 1, 0, 0.2), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+  abline(h = qeT, col = "black", lty = 2)
+  
+  par(old)
+  
+} # end plot_surv_spawn_ts()
+
+
+summaryCh3tsPlotNoise <- function(noise = noiseList, n = 1, J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
+  
+  ylim <- c(0,2)
+  lwd_ts <- 1.5
+  n_rows <- 1:200
+  
+  old <- par(mar = c(1,2,1,1), cex = .7)
+  # white noise
+  # Label
+  print("white")
+  par(fig=c(0, 0.16, 0.85, 1))
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "White noise", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.9, 1))
+  par(fig=c(0.16, 0.44, 0.85, 1), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.9, 1), new = TRUE)
-  plot(1:nrow(noiseList[[1]]), noiseList[[1]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.85, 1), new = TRUE)
+  plot(n_rows, noiseList[[1]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.9, 1), new = TRUE)
-  white.wt <- wt(cbind(1:nrow(noiseList[[1]]), noiseList[[1]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.85, 1), new = TRUE)
+  white.wt <- wt(cbind(n_rows, noiseList[[1]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(white.wt)
   
   # Bandpass period 3-4
+  # label
+  print("cohort")
+  par(fig=c(0, 0.16, 0.7, 0.85), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Period 3-4", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.8, 0.9), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.7, 0.85), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.8, 0.9), new = TRUE)
-  plot(1:nrow(noiseList[[2]]), noiseList[[2]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.7, 0.85), new = TRUE)
+  plot(n_rows, noiseList[[2]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.8, 0.9), new = TRUE)
-  p34.wt <- wt(cbind(1:nrow(noiseList[[2]]), noiseList[[2]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.7, 0.85), new = TRUE)
+  p34.wt <- wt(cbind(n_rows, noiseList[[2]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34.wt)
   
-  
-  # Band reject period 3-4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.7, 0.8), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.7, 0.8), new = TRUE)
-  plot(1:nrow(noiseList[[3]]), noiseList[[3]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.7, 0.8), new = TRUE)
-  pNo34.wt <- wt(cbind(1:nrow(noiseList[[3]]), noiseList[[3]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pNo34.wt)
-  
-  
-  # Bandpass greater than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.6, 0.7), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.6, 0.7), new = TRUE)
-  plot(1:nrow(noiseList[[4]]), noiseList[[4]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.6, 0.7), new = TRUE)
-  pgt4.wt <- wt(cbind(1:nrow(noiseList[[4]]), noiseList[[4]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.5, 0.6), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.5, 0.6), new = TRUE)
-  plot(1:nrow(noiseList[[5]]), noiseList[[5]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.5, 0.6), new = TRUE)
-  plt4.wt <- wt(cbind(1:nrow(noiseList[[5]]), noiseList[[5]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt4.wt)
-  
-  
-  # Bandpass greater than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.4, 0.5), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.4, 0.5), new = TRUE)
-  plot(1:nrow(noiseList[[6]]), noiseList[[6]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.4, 0.5), new = TRUE)
-  pgt4.wt <- wt(cbind(1:nrow(noiseList[[6]]), noiseList[[6]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.3, 0.4), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.25, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.3, 0.4), new = TRUE)
-  plot(1:nrow(noiseList[[7]]), noiseList[[7]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.3, 0.4), new = TRUE)
-  plt3.wt <- wt(cbind(1:nrow(noiseList[[7]]), noiseList[[7]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt3.wt)
-  
-  
   # Bandpass greater than period 10
+  # label
+  print("low")
+  par(fig=c(0, 0.16, 0.55, 0.7), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Low Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.2, 0.3), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.55, 0.7), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.2, 0.3), new = TRUE)
-  plot(1:nrow(noiseList[[8]]), noiseList[[8]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.55, 0.7), new = TRUE)
+  plot(n_rows, noiseList[[3]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.2, 0.3), new = TRUE)
-  pgt10.wt <- wt(cbind(1:nrow(noiseList[[8]]), noiseList[[8]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.55, 0.7), new = TRUE)
+  pgt10.wt <- wt(cbind(n_rows, noiseList[[3]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(pgt10.wt)
   
   
   # Bandpass greater than period 10 and period 3-4
+  # label
+  print("both")
+  par(fig=c(0, 0.16, 0.4, 0.55), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Both Cohort and\nLow Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.1, 0.2), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.4, 0.55), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
@@ -2512,13 +2470,64 @@ summaryCh3tsPlotNoise <- function(noise = noiseList, n = 1, J1 = trunc((log(32/(
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.1, 0.2), new = TRUE)
-  plot(1:nrow(noiseList[[9]]), noiseList[[9]][,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.4, 0.55), new = TRUE)
+  plot(n_rows, noiseList[[4]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.1, 0.2), new = TRUE)
-  p34gt10.wt <- wt(cbind(1:nrow(noiseList[[9]]), noiseList[[9]][,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.4, 0.55), new = TRUE)
+  p34gt10.wt <- wt(cbind(n_rows, noiseList[[4]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34gt10.wt)
+  
+  # one over f noise (beta = 1)
+  # label
+  print("1/f^b")
+  par(fig=c(0, 0.16, 0.25, 0.4), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+
+  # Generating spectrum
+  par(fig=c(0.16, 0.44, 0.25, 0.4), new = TRUE)
+  Ns <- 50
+  xs <- seq(0,0.5, length = Ns)
+  ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
+  scaled_ys <- 2 * (ys / max(ys[-1]))
+  plot(x = xs[-1], y = scaled_ys[-1], type = "l",
+       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
+       xaxs = "i", yaxs = "i")
+  polygon(c(xs[-1],rev(xs[-1])),
+          c(rep(0, length = Ns-1), rev(scaled_ys[-1])),
+          col="gray")
+
+  # time series plot
+  par(fig=c(0.44, 0.72, 0.25, 0.4), new = TRUE)
+  plot(n_rows, noiseList[[5]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  
+  # plot wavelet power spectrum
+  par(fig=c(0.72, 1, 0.25, 0.4), new = TRUE)
+  p_one_over_f.wt <- wt(cbind(n_rows, noiseList[[5]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p_one_over_f.wt)
+  
+  # ar-noise phi = 0.5   
+  # label
+  print("AR1")
+  par(fig=c(0, 0.16, 0.1, 0.25), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(AR1 ~ phi: 0.5), cex = 1)
+  
+  # Generating spectrum
+  par(fig=c(0.16, 0.44, 0.1, 0.25), new = TRUE)
+  plot(x = 0:2, y = 0:2, type = "n",
+       axes = F, xlab = "", ylab = "")
+  text(1,1, "Not applicable", cex = 1)
+  
+  # time series plot
+  par(fig=c(0.44, 0.72, 0.1, 0.25), new = TRUE)
+  plot(n_rows, noiseList[[7]][n_rows,n], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  
+  # plot wavelet power spectrum
+  par(fig=c(0.72, 1, 0.1, 0.25), new = TRUE)
+  p_ar1.wt <- wt(cbind(n_rows, noiseList[[7]][n_rows,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p_ar1.wt)
   
   par(old)
   
@@ -2526,167 +2535,101 @@ summaryCh3tsPlotNoise <- function(noise = noiseList, n = 1, J1 = trunc((log(32/(
 
 
 summaryCh3tsPlotSpawners <- function(spawners = storage, 
-                                     meanSurv = 0.35,
+                                     meanSurv = 0.5,
                                      sigma = 0.2, 
                                      n = 1, 
                                      J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
   
   spPlot <- copy(spawners[ i = N > 400 & reps_c == 1 & sigPSmult_c == sigma & meanPS_c == meanSurv ])
   
-  library(biwavelet)
-  
-  ylim = c(0,2)
+  ylim <- c(0,2)
   lwd_ts <- 1.5
+  n_rows <- 1:200
   
   old <- par(mar = c(1,2,1,1), cex = .7)
   
   # white noise
+  # Label
+  print("white")
+  par(fig=c(0, 0.16, 0.85, 1))
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "White noise", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.9, 1))
+  par(fig=c(0.16, 0.44, 0.85, 1), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.9, 1), new = TRUE)
-  plot(1:length(spPlot[ j = white]), spPlot[ j = white], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.85, 1), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.9, 1), new = TRUE)
-  white.wt <- wt(cbind(1:length(spPlot[ j = white]), spPlot[ j = white]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.85, 1), new = TRUE)
+  white.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = white]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(white.wt)
   
   # Bandpass period 3-4
+  # label
+  print("cohort")
+  par(fig=c(0, 0.16, 0.7, 0.85), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Period 3-4", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.8, 0.9), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.7, 0.85), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.8, 0.9), new = TRUE)
-  plot(1:length(spPlot[ j = p34]), spPlot[ j = p34], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.7, 0.85), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.8, 0.9), new = TRUE)
-  p34.wt <- wt(cbind(1:length(spPlot[ j = p34]), spPlot[ j = p34]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.7, 0.85), new = TRUE)
+  p34.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = p34]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34.wt)
-  
-  
-  # Band reject period 3-4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.7, 0.8), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.7, 0.8), new = TRUE)
-  plot(1:length(spPlot[ j = pNo34]), spPlot[ j = pNo34], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.7, 0.8), new = TRUE)
-  pNo34.wt <- wt(cbind(1:length(spPlot[ j = pNo34]), spPlot[ j = pNo34]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pNo34.wt)
-  
-  
-  # Bandpass greater than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.6, 0.7), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.25, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.6, 0.7), new = TRUE)
-  plot(1:length(spPlot[ j = pgt4]), spPlot[ j = pgt4], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.6, 0.7), new = TRUE)
-  pgt4.wt <- wt(cbind(1:length(spPlot[ j = pgt4]), spPlot[ j = pgt4]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.5, 0.6), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.33, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.5, 0.6), new = TRUE)
-  plot(1:length(spPlot[ j = plt3]), spPlot[ j = plt3], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.5, 0.6), new = TRUE)
-  plt4.wt <- wt(cbind(1:length(spPlot[ j = plt3]), spPlot[ j = plt3]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt4.wt)
-  
-  
-  # Bandpass greater than period 3
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.4, 0.5), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.4, 0.5), new = TRUE)
-  plot(1:length(spPlot[ j = pgt3]), spPlot[ j = pgt3], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.4, 0.5), new = TRUE)
-  pgt4.wt <- wt(cbind(1:length(spPlot[ j = pgt3]), spPlot[ j = pgt3]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(pgt4.wt)
-  
-  
-  # Bandpass less than period 4
-  # Generating spectrum
-  par(fig=c(0, 0.33, 0.3, 0.4), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0.25, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
-  
-  # time series plot
-  par(fig=c(0.33, 0.66, 0.3, 0.4), new = TRUE)
-  plot(1:length(spPlot[ j = plt4]), spPlot[ j = plt4], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
-  
-  # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.3, 0.4), new = TRUE)
-  plt3.wt <- wt(cbind(1:length(spPlot[ j = plt4]), spPlot[ j = plt4]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(plt3.wt)
-  
-  
+
   # Bandpass greater than period 10
+  # label
+  print("low")
+  par(fig=c(0, 0.16, 0.55, 0.7), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Low Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.2, 0.3), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.55, 0.7), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.2, 0.3), new = TRUE)
-  plot(1:length(spPlot[ j = pgt10]), spPlot[ j = pgt10], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.55, 0.7), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.2, 0.3), new = TRUE)
-  pgt10.wt <- wt(cbind(1:length(spPlot[ j = pgt10]), spPlot[ j = pgt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.55, 0.7), new = TRUE)
+  pgt10.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = pgt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(pgt10.wt)
   
-  
+  ########### REF
   # Bandpass greater than period 10 and period 3-4
+  # label
+  print("both")
+  par(fig=c(0, 0.16, 0.4, 0.55), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, "Both Cohort and\nLow Frequency", cex = 1)
+  
   # Generating spectrum
-  par(fig=c(0, 0.33, 0.1, 0.2), new = TRUE)
+  par(fig=c(0.16, 0.44, 0.4, 0.55), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i")
@@ -2694,13 +2637,67 @@ summaryCh3tsPlotSpawners <- function(spawners = storage,
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   
   # time series plot
-  par(fig=c(0.33, 0.66, 0.1, 0.2), new = TRUE)
-  plot(1:length(spPlot[ j = p34gt10]), spPlot[ j = p34gt10], type = "l", col = "slateblue", lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  par(fig=c(0.44, 0.72, 0.4, 0.55), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
   
   # plot wavelet power spectrum
-  par(fig=c(0.66, 1, 0.1, 0.2), new = TRUE)
-  p34gt10.wt <- wt(cbind(1:length(spPlot[ j = p34gt10]), spPlot[ j = p34gt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  par(fig=c(0.72, 1, 0.4, 0.55), new = TRUE)
+  p34gt10.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = p34gt10]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34gt10.wt)
+  #### DOWN
+  # one over f noise (beta = 1)
+  # label
+  print("1/f^b")
+  par(fig=c(0, 0.16, 0.25, 0.4), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  
+  # Generating spectrum
+  par(fig=c(0.16, 0.44, 0.25, 0.4), new = TRUE)
+  Ns <- 50
+  xs <- seq(0,0.5, length = Ns)
+  ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
+  scaled_ys <- 2 * (ys / max(ys[-1]))
+  plot(x = xs[-1], y = scaled_ys[-1], type = "l",
+       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
+       xaxs = "i", yaxs = "i")
+  polygon(c(xs[-1],rev(xs[-1])),
+          c(rep(0, length = Ns-1), rev(scaled_ys[-1])),
+          col="gray")
+  
+  # time series plot
+  par(fig=c(0.44, 0.72, 0.25, 0.4), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  
+  # plot wavelet power spectrum
+  par(fig=c(0.72, 1, 0.25, 0.4), new = TRUE)
+  p_one_over_f.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = one_over_f]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p_one_over_f.wt)
+  
+  # ar-noise phi = 0.5   
+  # label
+  print("AR1")
+  par(fig=c(0, 0.16, 0.1, 0.25), new = TRUE)
+  plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
+  text(5,5, expression(AR1 ~ phi: 0.5), cex = 1)
+  
+  # Generating spectrum
+  par(fig=c(0.16, 0.44, 0.1, 0.25), new = TRUE)
+  plot(x = 0:2, y = 0:2, type = "n",
+       axes = F, xlab = "", ylab = "")
+  text(1,1, "Not applicable", cex = 1)
+  
+  # time series plot:
+  par(fig=c(0.44, 0.72, 0.1, 0.25), new = TRUE)
+  plot(n_rows, spPlot[i = n_rows, j = ar1], type = "l", col = "slateblue", 
+       lwd = lwd_ts, xlab = "Time (years)", ylab = "")
+  
+  # plot wavelet power spectrum
+  par(fig=c(0.72, 1, 0.1, 0.25), new = TRUE)
+  p_ar1.wt <- wt(cbind(n_rows, spPlot[i = n_rows, j = ar1]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
+  plot(p_ar1.wt)
   
   par(old)
   
