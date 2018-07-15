@@ -28,7 +28,7 @@ sessionInfo() # documents the version of R and any included packages,
 # to reproduce the environment that yielded the results
 
 # set random seed
-r_seed <- 42 # 64
+r_seed <- 64
 set.seed(r_seed)
 
 # prelims
@@ -271,8 +271,10 @@ dev.off()
 
 
 # Quasi-extinction metrics
+QE_sim_len <- 100
+upper_lim <- burn_in + QE_sim_len
 
-storage_sub <- copy(storage[ i = N > 400 & N <= 500  ])
+storage_sub <- copy(storage[ i = N > burn_in & N <= upper_lim  ])
 
 # CALCULATE QE YEAR ####
 
@@ -327,11 +329,12 @@ calc_pQE <- function(dt, expr) {
   dt[,eval(e), by = list(meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c)]
 }
 
-sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/len_sim,
-                                 p34_qe = length(which(!is.na(p34)))/len_sim,
-                                 pgt10_qe = length(which(!is.na(pgt10)))/len_sim,
-                                 p34gt10_qe = length(which(!is.na(p34gt10)))/len_sim,
-                                 one_over_f_qe = length(which(!is.na(one_over_f)))/len_sim))
+sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/QE_sim_len,
+                                 p34_qe = length(which(!is.na(p34)))/QE_sim_len,
+                                 pgt10_qe = length(which(!is.na(pgt10)))/QE_sim_len,
+                                 p34gt10_qe = length(which(!is.na(p34gt10)))/QE_sim_len,
+                                 one_over_f_qe = length(which(!is.na(one_over_f)))/QE_sim_len))
+
 
 spectra_names_qe <- c(
   `white_qe` = "White",
