@@ -28,7 +28,7 @@ sessionInfo() # documents the version of R and any included packages,
 # to reproduce the environment that yielded the results
 
 # set random seed
-r_seed <- 64
+r_seed <- 42 # 64
 set.seed(r_seed)
 
 # prelims
@@ -56,7 +56,7 @@ alphaMult <- 4
 EQsp <- 7500
 # Set mean survival and bounds/range 
 meanPS <- as.character(c(0.275, 0.5, 0.8))
-sigPSmult <- as.character(seq(0.1, 0.5, by = 0.1))
+sigPSmult <- as.character(seq(0.1, 0.5, by = 0.025))
 
 freqCont <- c("white", "p34", "pgt10", "p34gt10", "one_over_f")
 surv1 <- 0.02 # first year ocean survival
@@ -222,7 +222,7 @@ rm(storageP, french, red_beta_1, rsin_34_gt10_n, rsin_34_n, rsin_gt10_n,
    sigPSmult_r)
 
 # Fig 2: Plot frequency response at 3 survival levels 
-pdf(file.path(".", "output_ms", "TEMP_Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 8, height = 6)
+pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 8, height = 6)
 # old <- par(mfrow = c(4,1), mar = c(1,5, 1, 1))
 old <- par(mar = c(1,5,1,1))
 plot_dat <- storage[ i = N > 400 & sigPSmult_c == "0.1"]
@@ -238,7 +238,7 @@ dev.off()
 ## Fig 3 Summary plots of noise signals
 plot_idx <- 3
 
-pdf(file.path(".", "output_ms", "/TEMP_Fig_3_summaryFreqContTS_Noise.pdf"), width = 8, height = 6)
+pdf(file.path(".", "output_ms", "/Fig_3_summaryFreqContTS_Noise.pdf"), width = 8, height = 6)
 plot_gen_freq_wvlt(noise = noiseList,
                    burn_in_pd = burn_in,
                    num_rows2plt = 100,
@@ -257,7 +257,7 @@ dev.off()
 # n = 1, 
 # J1 = trunc((log(32/(2 * 1))/log(2))/0.01)
 
-pdf(file.path(".", "output_ms", "/TEMP_Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
+pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
                    burn_in_pd = burn_in,
@@ -272,7 +272,7 @@ dev.off()
 
 # Quasi-extinction metrics
 
-storage_sub <- copy(storage[ i = N > 400])
+storage_sub <- copy(storage[ i = N > 400 & N <= 500  ])
 
 # CALCULATE QE YEAR ####
 
@@ -282,7 +282,7 @@ calcQEyr <- function(dt, expr) {
   dt[,eval(e), by = list(meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c, reps_c)]
 }
 
-qe_lev <- 20
+qe_lev <- 100
 sb_qeyr <- calcQEyr(dt = storage_sub, expr = list( as.integer(JA_consec(white, run_length = 4, qeLev = qe_lev)),
                                                    as.integer(JA_consec(p34, run_length = 4, qeLev = qe_lev)),
                                                    as.integer(JA_consec(pgt10, run_length = 4, qeLev = qe_lev)),
@@ -302,7 +302,7 @@ spectra_names <- c(
 )
 
 ## Make figures
-pdf(file.path(".", "output_ms", "TEMP_Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 5, height = 8)
+pdf(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 5, height = 8)
 qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.275"]), id = c(1:5)))
 
 x <- ggplot(qet_tmp_sb_m, aes(x = value)) + 
@@ -327,11 +327,11 @@ calc_pQE <- function(dt, expr) {
   dt[,eval(e), by = list(meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c)]
 }
 
-sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/reps,
-                                 p34_qe = length(which(!is.na(p34)))/reps,
-                                 pgt10_qe = length(which(!is.na(pgt10)))/reps,
-                                 p34gt10_qe = length(which(!is.na(p34gt10)))/reps,
-                                 one_over_f_qe = length(which(!is.na(one_over_f)))/reps))
+sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/len_sim,
+                                 p34_qe = length(which(!is.na(p34)))/len_sim,
+                                 pgt10_qe = length(which(!is.na(pgt10)))/len_sim,
+                                 p34gt10_qe = length(which(!is.na(p34gt10)))/len_sim,
+                                 one_over_f_qe = length(which(!is.na(one_over_f)))/len_sim))
 
 spectra_names_qe <- c(
   `white_qe` = "White",
@@ -342,8 +342,8 @@ spectra_names_qe <- c(
 )
 
 
-pdf(file.path(".", "output_ms", "TEMP_Fig_5_sigma_vs_pQE2row.pdf"), width = 12, height = 9)
-pqe_tmp_m <- melt(copy(sb_pQE[ i = alphaMult_c == alphaMult & meanPS_c %in% c(meanPS[1], meanPS[3])]), id = c(1:4))
+pdf(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.pdf"), width = 12, height = 9)
+pqe_tmp_m <- melt(copy(sb_pQE[ i = alphaMult_c == alphaMult & meanPS_c %in% c(meanPS[1], meanPS[2])]), id = c(1:4))
 x <- ggplot(pqe_tmp_m, aes(x = as.numeric(sigPSmult_c), y = value)) + 
   geom_line(colour = "gray30", size = 1.2) + 
   facet_grid(meanPS_c ~ variable, labeller = labeller(variable = spectra_names_qe)) +
