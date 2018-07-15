@@ -12,17 +12,14 @@ source("./code_ms/functions.R")
 # libraries
 library(ggplot2)
 library(reshape2)
-# library(plyr)
 library(data.table)
 library(TSA)
 library(biwavelet)
-# library(grid)
 library(compiler)
 # load foreach package for parallel processing
 library(foreach)
 # set up backend to do parallel processing
 library(doParallel)
-# detectCores()
 registerDoParallel() # defaults to half of the cores 
 
 system("hostname")  # record name of the machine
@@ -46,14 +43,26 @@ if (!exists(support_dir_name)) dir.create(support_dir_name, recursive = TRUE)
 ##  params
 
 # "fixed" parameters for subsequent noise generation and population modeling
-reps <- 10
-N <- 1424
+# number of simulations for each parm combination
+reps <- 1000
+# length of each simulation
+len_sim <- 2^10
+burn_in <- 400
+N <- burn_in + len_sim
+
+# Parm combination
+# Frequency response of "population" at three levels of survival for white noise
+alphaMult <- 4
+EQsp <- 7500
+# Set mean survival and bounds/range 
+meanPS <- as.character(c(0.275, 0.5, 0.8))
+sigPSmult <- as.character(seq(0.1, 0.5, by = 0.1))
+
 freqCont <- c("white", "p34", "pgt10", "p34gt10", "one_over_f")
 surv1 <- 0.02 # first year ocean survival
 surv2 <- surv3 <- 0.8 # ocean survival in later years
 wanted_frac <- 0.5 # parameter to determine the fraction spawning at age-3 and 4 (equilibrium).
 
-# Before generating the random variables of noise to force survival
 # determine the mean survival level based on the (low) survival rate
 # the produces stock collapse [1/SPR == alpha] and then set survival
 # rates at incrementally higher levels.
@@ -65,13 +74,13 @@ wanted_frac <- 0.5 # parameter to determine the fraction spawning at age-3 and 4
 delta_e <- calc_de(wanted_frac, surv3)
 # calculate spawners per recruit (1/spr = replacement line, baseline/floor for alpha)
 spr <- SPR_srcs(surv1, surv2, surv3, delta_e, survPS = 1)  
-alphaMult <- 4 # multiplier of replacement line slope to set alpha [from 2-10]
+# multiplier of replacement line slope to set alpha 
+alphaMult <- 4 
 alpha <- alphaMult * 1/spr
+
 sps_crash <- 1/{alpha*surv1*surv2*{delta_e + surv3*{1 - delta_e}}}
 
-#sps_adds <- seq(0.05, 0.3, by = 0.05) # 0.05 increments in survival
 sps_mults <- seq(1.1, 1.5, by = 0.1) #seq(1.1, 1.5, by = 0.2)
-
 
 # create white noise
 
@@ -116,37 +125,27 @@ noiseList <- list(noise_white = white_n,
                   noise_34gt10 = rsin_34_gt10_n,
                   noise_red_beta_1 = red_beta_1)
 
-# rm individual sets of noise
-# rm(white_n, rsin_34_n, rsin_gt10_n, rsin_34_gt10_n, red_beta_1)
 
 
+## Create data.table to store simulation results
 
-# Frequency response of "population" at three levels of survival for white noise
-alphaMult <- 4
-EQsp <- 7500
-
-# BASE
-meanPS <- as.character(c(0.3, 0.4, 0.5))
-survRange <- as.character(seq(0.2, 0.8, by = 0.2))
-
-
-meanPS_r <- rep(meanPS, each = length(survRange)*length(alphaMult)*length(EQsp)*reps*N)
-survRange_r <- rep(survRange, each = length(alphaMult)*length(EQsp)*reps*N, times = length(meanPS))
-alphaMult_r <- rep(alphaMult, each = length(EQsp)*reps*N, times = length(meanPS)*length(survRange))
-EQsp_r <- rep(EQsp, each = reps*N, times = length(meanPS)*length(survRange)*length(alphaMult))
-reps_r <- rep(1:reps, each = N, times = length(meanPS)*length(survRange)*length(alphaMult)*length(EQsp))
-n_r <- rep(1:N, times = length(meanPS)*length(survRange)*length(alphaMult)*length(EQsp)*reps)
+meanPS_r <- rep(meanPS, each = length(sigPSmult)*length(alphaMult)*length(EQsp)*reps*N)
+sigPSmult_r <- rep(sigPSmult, each = length(alphaMult)*length(EQsp)*reps*N, times = length(meanPS))
+alphaMult_r <- rep(alphaMult, each = length(EQsp)*reps*N, times = length(meanPS)*length(sigPSmult))
+EQsp_r <- rep(EQsp, each = reps*N, times = length(meanPS)*length(sigPSmult)*length(alphaMult))
+reps_r <- rep(1:reps, each = N, times = length(meanPS)*length(sigPSmult)*length(alphaMult)*length(EQsp))
+n_r <- rep(1:N, times = length(meanPS)*length(sigPSmult)*length(alphaMult)*length(EQsp)*reps)
 
 
 storageP <- data.table::data.table(meanPS_c = meanPS_r,
-                                   survRange_c = survRange_r,
+                                   sigPSmult_c = sigPSmult_r,
                                    alphaMult_c = alphaMult_r,
                                    EQsp_c = EQsp_r,
                                    reps_c = reps_r,
                                    N = n_r,
                                    white = 0) 
 
-data.table::setkey(storageP, meanPS_c, survRange_c, alphaMult_c, EQsp_c, reps_c)
+data.table::setkey(storageP, meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c, reps_c)
 
 # split storageP by meanPS so each component of the
 # then I'll put all the lists back together at the end of the simulation
@@ -162,22 +161,25 @@ popSimPSvaryCmp <- cmpfun(popSimPSvary)
 parSimCmp <- function(dt, 
                       noise_list,
                       freq_cont = c("white", "p34", "pgt10", "p34gt10", "one_over_f"),  
-                      sim_len = 1024, 
+                      sim_len = len_sim, 
+                      burn_in = burn_in, 
                       surv_mean, 
-                      surv_range, 
+                      sd_surv, 
                       alpha_mult = 4,
                       EQ_sp = EQsp,
                       frac_wanted = 0.5) {
   for (i in 1:length(freq_cont)) {
-    # for (j in surv_mean) {
-      for (k in surv_range) {
+      for (k in sd_surv) {
+        # print(paste0(i, ":", k))
+        # print(head(noise_list[[i]]))
         surv <- make_surv_mat(noise_dat = noise_list[[i]], 
                               mean_surv = as.numeric(surv_mean), 
-                              sim_len,
-                              range_surv = as.numeric(k))
+                              sd_surv = k,
+                              sim_len = sim_len,
+                              burn_in = burn_in) 
         for (l in alpha_mult) {
           for (m in EQ_sp) {
-            dt[i = (survRange_c == k & alphaMult_c == l & EQsp_c == m), 
+            dt[i = (sigPSmult_c == k & alphaMult_c == l & EQsp_c == m), 
                j = freq_cont[i] := list(melt(popSimPSvaryCmp(rand_surv = surv, 
                                                              surv1 = surv1, 
                                                              surv2 = surv2, 
@@ -188,7 +190,6 @@ parSimCmp <- function(dt,
           }
         }
       } 
-    # }
   }
   return(dt)
 } # end of parSimCmp()
@@ -202,46 +203,158 @@ system.time(
     parSimCmp(dt = french[[h]], 
               noise_list = noiseList,
               freq_cont = c("white", "p34", "pgt10", "p34gt10", "one_over_f"),  
-              sim_len = 1024, 
-              surv_mean = meanPS[h], 
-              surv_range = survRange)
+              sim_len = 1024,
+              burn_in = burn_in,
+              surv_mean = as.numeric(meanPS[h]), 
+              sd_surv = as.numeric(sigPSmult), 
+              alpha_mult = 4,
+              EQ_sp = EQsp,
+              frac_wanted = 0.5)
   }
 ) 
 
 storage <- rbindlist(storage)
 
+apply(storage[,1:3], 2, unique)
 
+rm(storageP, french, red_beta_1, rsin_34_gt10_n, rsin_34_n, rsin_gt10_n,
+   white_n, alphaMult_r, EQsp_r, meanPS_r, n_r, reps_r, 
+   sigPSmult_r)
 
 # Fig 2: Plot frequency response at 3 survival levels 
-pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 8, height = 6)
+pdf(file.path(".", "output_ms", "TEMP_Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 8, height = 6)
 # old <- par(mfrow = c(4,1), mar = c(1,5, 1, 1))
 old <- par(mar = c(1,5,1,1))
-plot_dat <- storage[ i = N > 400 & survRange_c == 0.4]
-plotMeanFR_DTmany(plot_dat, N = 1024, surv = meanPS[1], scale = "CV", yaxis_lim = c(0,1))
+plot_dat <- storage[ i = N > 400 & sigPSmult_c == "0.1"]
+plotMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[1]), scale = "CV", yaxis_lim = c(0,4))
 title(xlab = "Frequency")
-linesMeanFR_DTmany(plot_dat, N = 1024, surv = meanPS[2], line_color = "black", scale = "CV")
-linesMeanFR_DTmany(plot_dat, N = 1024, surv = meanPS[3], line_color = "grey30", scale = "CV")
-legend("topright", legend = c(meanPS[1], meanPS[2], meanPS[3]), lty = c(2,1,1), col = c("black", "black", "grey30"), lwd = 3)
-par(old)
+linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[2]), line_color = "black", scale = "CV")
+linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[3]), line_color = "grey30", scale = "CV")
+legend("topright", legend = c(meanPS[1], meanPS[3], meanPS[4]), lty = c(2,1,1), col = c("black", "black", "grey30"), lwd = 3)
+par(old) 
 dev.off()
 
 
 ## Fig 3 Summary plots of noise signals
-pdf(file.path(".", "output_ms", "/Fig_3_summaryFreqContTS_Noise.pdf"), width = 8, height = 6)
-plot_gen_freq_wvlt(noise = noiseList, 
-                      n = 1, 
-                      J1 = trunc((log(32/(2 * 1))/log(2))/0.01))
+plot_idx <- 3
+
+pdf(file.path(".", "output_ms", "/TEMP_Fig_3_summaryFreqContTS_Noise.pdf"), width = 8, height = 6)
+plot_gen_freq_wvlt(noise = noiseList,
+                   burn_in_pd = burn_in,
+                   num_rows2plt = 100,
+                   n = plot_idx, 
+                   J1 = trunc((log(32/(2 * 1))/log(2))/0.01))
 dev.off()
 
 ## Fig 4. Summary plot of spawning female abundance
 
-pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
+# spawners = storage, 
+# noise = noiseList,
+# burn_in_pd,
+# num_rows2plt = 100,
+# meanSurv = "0.5",
+# sigPSmult = "0.2", 
+# n = 1, 
+# J1 = trunc((log(32/(2 * 1))/log(2))/0.01)
+
+pdf(file.path(".", "output_ms", "/TEMP_Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
-                   meanSurv = 0.3,
-                   rangeSurv = 0.4,
-                   n = 1,
+                   burn_in_pd = burn_in,
+                   num_rows2plt = 100,
+                   sim_len = len_sim,
+                   meanSurv = "0.5",
+                   sigPSmult = "0.2", 
+                   n = plot_idx,
                    J1 = trunc((log(32/(2 * 1))/log(2))/0.01))
+dev.off()
+
+
+# Quasi-extinction metrics
+
+storage_sub <- copy(storage[ i = N > 400])
+
+# CALCULATE QE YEAR ####
+
+# A function wrapper format for data.tables
+calcQEyr <- function(dt, expr) {
+  e <- substitute(expr) 
+  dt[,eval(e), by = list(meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c, reps_c)]
+}
+
+qe_lev <- 20
+sb_qeyr <- calcQEyr(dt = storage_sub, expr = list( as.integer(JA_consec(white, run_length = 4, qeLev = qe_lev)),
+                                                   as.integer(JA_consec(p34, run_length = 4, qeLev = qe_lev)),
+                                                   as.integer(JA_consec(pgt10, run_length = 4, qeLev = qe_lev)),
+                                                   as.integer(JA_consec(p34gt10, run_length = 4, qeLev = qe_lev)),
+                                                   as.integer(JA_consec(one_over_f, run_length = 4, qeLev = qe_lev)))) 
+
+# need to name the new columns
+setnames(sb_qeyr, c("V1", "V2", "V3", "V4", "V5"),
+         c("white", "p34", "pgt10", "p34gt10", "one_over_f"))
+
+spectra_names <- c(
+  `white` = "White",
+  `p34` = "Cohort Frequencies",
+  `pgt10` = "Low Frequencies",
+  `p34gt10` = "Both",
+  `one_over_f` = "1/f"
+)
+
+## Make figures
+pdf(file.path(".", "output_ms", "TEMP_Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 5, height = 8)
+qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.275"]), id = c(1:5)))
+
+x <- ggplot(qet_tmp_sb_m, aes(x = value)) + 
+  geom_histogram() + 
+  facet_grid(variable ~ . , labeller = as_labeller(spectra_names)) +
+  xlim(c(0, 100)) +
+  xlab("Time (Year)") +
+  ylab("Count") +
+  theme_bw() +
+  theme(strip.text.y = element_text(angle = 0)) + 
+  theme(strip.background = element_rect(fill="white"))
+print(x)
+
+dev.off()
+
+
+# Fig 6
+# CALCULATE PQE ####
+
+calc_pQE <- function(dt, expr) {
+  e <- substitute(expr) 
+  dt[,eval(e), by = list(meanPS_c, sigPSmult_c, alphaMult_c, EQsp_c)]
+}
+
+sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/reps,
+                                 p34_qe = length(which(!is.na(p34)))/reps,
+                                 pgt10_qe = length(which(!is.na(pgt10)))/reps,
+                                 p34gt10_qe = length(which(!is.na(p34gt10)))/reps,
+                                 one_over_f_qe = length(which(!is.na(one_over_f)))/reps))
+
+spectra_names_qe <- c(
+  `white_qe` = "White",
+  `p34_qe` = "Cohort Frequencies",
+  `pgt10_qe` = "Low Frequencies",
+  `p34gt10_qe` = "Both",
+  `one_over_f_qe` = "1/f"
+)
+
+
+pdf(file.path(".", "output_ms", "TEMP_Fig_5_sigma_vs_pQE2row.pdf"), width = 12, height = 9)
+pqe_tmp_m <- melt(copy(sb_pQE[ i = alphaMult_c == alphaMult & meanPS_c %in% c(meanPS[1], meanPS[3])]), id = c(1:4))
+x <- ggplot(pqe_tmp_m, aes(x = as.numeric(sigPSmult_c), y = value)) + 
+  geom_line(colour = "gray30", size = 1.2) + 
+  facet_grid(meanPS_c ~ variable, labeller = labeller(variable = spectra_names_qe)) +
+  theme(axis.text = element_text(size = 8, colour = "black")) +
+  ylab("Probability of Quasi-Extinction") +
+  xlab(expression(paste(sigma))) +
+  theme_bw()  +
+  theme(strip.text.y = element_text(angle = 0)) + 
+  theme(strip.background = element_rect(fill="white"))
+print(x)
+
 dev.off()
 
 
