@@ -186,7 +186,9 @@ wavelet_SALMOD_series <- function(management = ,
         if (!dir.exists(out_wavelet)) { dir.create(out_wavelet, recursive = TRUE) }
         
         path4file <- file.path(out_wavelet, paste0(mgmtScenarios[m], "_", climateScenarios[c], ".pdf"))
-        pdf(file = path4file)
+        setEPS()
+        postscript(file = path4file)
+        # pdf(file = path4file)
         
         for (i in 2:dims[2]) {
           #i <- 2

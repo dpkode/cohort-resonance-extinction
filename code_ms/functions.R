@@ -992,44 +992,43 @@ plotMeanFreqR_DT <- function(dataTable, N, surv, scale = "CV", yaxis_lim = c(0, 
 
 # Plot only the mean Frequency Response, and allow adding addition Frequency Response plots (lines)
 
-
-plotMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", AR_col, yaxis_lim) {
-  # spectral frequency 
-  if (trunc(sqrt(N)) %% 2 == 0) {
-    m <- trunc(sqrt(N)) + 1 
-  } else {
-    m <- trunc(sqrt(N))
-  }
-  
-  spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
-  
-  freq <- (1:(N/2))/N
-  for (i in 1:ncol(spcMean)) {
-    
-    ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
-    
-    ifelse(all(ts == 0), 
-           spcMean[,i] <- rep(NA, times = N/2),
-           ifelse(scale == "CV", 
-                  spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
-                  spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
-  }
-  mean_spc <- rowMeans(spcMean, na.rm = TRUE)
-  
-  spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
-  spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
-  spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
-  spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
-  
-  if ( !exists("yaxis_lim") ) ifelse(scale == "CV", yaxis_lim <- c(0,1.2*max(mean_spc[which(freq > 0.2)])), yaxis_lim <- c(0, 20))
-  
-  plot(freq, mean_spc, type = "n", xlab = "Frequency", ylab = "Relative Magnitude", las = 1, ylim = yaxis_lim)
-  lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = "black")
-  lines(freq, mean_spc, type = "l", lwd = 2, col = "white")
-  lines(freq, mean_spc, lwd = 2, lty = 2)
-  
-  box(lwd=2)
-}
+# plotMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", AR_col, yaxis_lim) {
+#   # spectral frequency 
+#   if (trunc(sqrt(N)) %% 2 == 0) {
+#     m <- trunc(sqrt(N)) + 1 
+#   } else {
+#     m <- trunc(sqrt(N))
+#   }
+#   
+#   spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
+#   
+#   freq <- (1:(N/2))/N
+#   for (i in 1:ncol(spcMean)) {
+#     
+#     ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
+#     
+#     ifelse(all(ts == 0), 
+#            spcMean[,i] <- rep(NA, times = N/2),
+#            ifelse(scale == "CV", 
+#                   spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
+#                   spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
+#   }
+#   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
+#   
+#   spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
+#   spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
+#   spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
+#   spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
+#   
+#   if ( !exists("yaxis_lim") ) ifelse(scale == "CV", yaxis_lim <- c(0,1.2*max(mean_spc[which(freq > 0.2)])), yaxis_lim <- c(0, 20))
+#   
+#   plot(freq, mean_spc, type = "n", xlab = "Frequency", ylab = "Relative Magnitude", las = 1, ylim = yaxis_lim)
+#   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = "black")
+#   lines(freq, mean_spc, type = "l", lwd = 2, col = "white")
+#   lines(freq, mean_spc, lwd = 2, lty = 2)
+#   
+#   box(lwd=2)
+# }
 
 plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
   # spectral frequency 
@@ -1043,14 +1042,14 @@ plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
   
   freq <- (1:(N/2))/N
   for (i in 1:ncol(spcMean)) {
-    ifelse(all(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+    ifelse(all(dataTable[i = reps_c == i & meanPS_c == surv,
                          j = white] == 0), 
            spcMean[,i] <- rep(NA, times = N/2),
            ifelse(scale == "CV", 
-                  spcMean[,i] <- periodogram(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
-                                                       j = white]/mean(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+                  spcMean[,i] <- periodogram(dataTable[i = reps_c == i & meanPS_c == surv,
+                                                       j = white]/mean(dataTable[i = reps_c == i & meanPS_c == surv,
                                                                                  j = white]), plot = F )$spec, 
-                  spcMean[,i] <- periodogram(scale(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+                  spcMean[,i] <- periodogram(scale(dataTable[i = reps_c == i & meanPS_c == surv,
                                                              j = white]), plot = F )$spec ) )
     
   }
@@ -1071,39 +1070,38 @@ plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
   box(lwd=2)
 }
 
-linesMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", line_color, AR_col) {
-  # spectral frequency 
-  if (trunc(sqrt(N)) %% 2 == 0) {
-    m <- trunc(sqrt(N)) + 1 
-  } else {
-    m <- trunc(sqrt(N))
-  }
-  
-  spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
-  
-  freq <- (1:(N/2))/N
-  for (i in 1:ncol(spcMean)) {
-    
-    ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
-    
-    ifelse(all(ts == 0), 
-           spcMean[,i] <- rep(NA, times = N/2),
-           ifelse(scale == "CV", 
-                  spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
-                  spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
-  }
-  mean_spc <- rowMeans(spcMean, na.rm = TRUE)
-  
-  spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
-  spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
-  spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
-  spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
-  
-  lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = line_color)
-  
-  box(lwd=2)
-}
-
+# linesMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", line_color, AR_col) {
+#   # spectral frequency 
+#   if (trunc(sqrt(N)) %% 2 == 0) {
+#     m <- trunc(sqrt(N)) + 1 
+#   } else {
+#     m <- trunc(sqrt(N))
+#   }
+#   
+#   spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
+#   
+#   freq <- (1:(N/2))/N
+#   for (i in 1:ncol(spcMean)) {
+#     
+#     ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
+#     
+#     ifelse(all(ts == 0), 
+#            spcMean[,i] <- rep(NA, times = N/2),
+#            ifelse(scale == "CV", 
+#                   spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
+#                   spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
+#   }
+#   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
+#   
+#   spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
+#   spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
+#   spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
+#   spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
+#   
+#   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = line_color)
+#   
+#   box(lwd=2)
+# }
 
 linesMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", line_color) {
   # spectral frequency 
@@ -1117,18 +1115,15 @@ linesMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", line_color) {
   
   freq <- (1:(N/2))/N
   for (i in 1:ncol(spcMean)) {
-    ifelse(all(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+    ifelse(all(dataTable[i = reps_c == i & meanPS_c == surv,
                          j = white] == 0), 
            spcMean[,i] <- rep(NA, times = N/2),
            ifelse(scale == "CV", 
-                  spcMean[,i] <- periodogram(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
-                                                       j = white]/mean(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+                  spcMean[,i] <- periodogram(dataTable[i = reps_c == i & meanPS_c == surv,
+                                                       j = white]/mean(dataTable[i = reps_c == i & meanPS_c == surv,
                                                                                  j = white]), plot = F )$spec, 
-                  spcMean[,i] <- periodogram(scale(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
+                  spcMean[,i] <- periodogram(scale(dataTable[i = reps_c == i & meanPS_c == surv,
                                                              j = white]), plot = F )$spec ) )
-    
-    #            spcMean[,i] <- spec.pgram(scale(dataTable[i = reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001,
-    #                                                      j = white]), plot = F, c(m,m))$spec )
   }
   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
   
@@ -2311,7 +2306,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   
   # time series plot: spawners 
   par(fig=c(0.60, 1, 0.80, 1), new = TRUE)
-  plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "slateblue", 
+  plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "grey20", 
        lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
   
@@ -2329,7 +2324,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.6, 0.8), new = TRUE)
-  plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "slateblue", 
+  plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "grey20", 
        lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
   
@@ -2347,7 +2342,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.4, 0.6), new = TRUE)
-  plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "slateblue", 
+  plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "grey20", 
        lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
   
@@ -2365,7 +2360,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.2, 0.4), new = TRUE)
-  plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "slateblue", 
+  plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "grey20", 
        lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
   
@@ -2383,7 +2378,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0, 0.2), new = TRUE)
-  plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "slateblue", 
+  plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "grey20", 
        lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
   
