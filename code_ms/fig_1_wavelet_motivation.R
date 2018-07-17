@@ -88,8 +88,11 @@ wavelet_plot <- function(df,
   out_wavelet <- file.path(".", "output_ms")
   if (!dir.exists(out_wavelet)) { dir.create(out_wavelet, recursive = TRUE) }
   
-  path4file <- file.path(out_wavelet, paste0("Fig_1_wavelet_", mgmtScenarios, "_", climateScenarios, "_", global_mods, ".pdf"))
-  pdf(file = path4file)
+  # path4file <- file.path(out_wavelet, paste0("Fig_1_wavelet_", mgmtScenarios, "_", climateScenarios, "_", global_mods, ".pdf"))
+  # pdf(file = path4file)
+  path4file <- file.path(out_wavelet, paste0("Fig_1_wavelet_", mgmtScenarios, "_", climateScenarios, "_", global_mods, ".ps"))
+  setEPS()
+  postscript(file = path4file)
   
   # Time series
   par(fig = c(0, 1, 0.5, 1))
@@ -132,7 +135,7 @@ wavelet_plot(df = ps_dat,
              global_mods = "mpiecham5") 
 
 
-wavelet_SALMOD_series <- function(management = ,
+wavelet_SALMOD_series <- function(management = "NoDiversion",
                                     emissions = c("A2","B1"),
                                     global_mods = c("cnrmcm3", "gfdlcm21", "miroc32med", "mpiecham5", "ncarccsm3", "ncarpcm1") 
   ) {
@@ -186,9 +189,7 @@ wavelet_SALMOD_series <- function(management = ,
         if (!dir.exists(out_wavelet)) { dir.create(out_wavelet, recursive = TRUE) }
         
         path4file <- file.path(out_wavelet, paste0(mgmtScenarios[m], "_", climateScenarios[c], ".pdf"))
-        setEPS()
-        postscript(file = path4file)
-        # pdf(file = path4file)
+        pdf(file = path4file)
         
         for (i in 2:dims[2]) {
           #i <- 2
