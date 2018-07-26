@@ -1062,7 +1062,9 @@ plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
   
   if ( !exists("yaxis_lim") ) ifelse(scale == "CV", yaxis_lim <- c(0,1.2*max(mean_spc[which(freq > 0.2)])), yaxis_lim <- c(0, 20))
   
-  plot(freq, mean_spc, type = "n", xlab = "Frequency", ylab = "Relative Magnitude", las = 1, ylim = yaxis_lim)
+  plot(freq, mean_spc, type = "n", ylab = "Relative Magnitude", 
+       las = 1, ylim = yaxis_lim,
+       main = "Transfer Function", xlab = expression('Frequency' ~ y^-1))
   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = "black")
   lines(freq, mean_spc, type = "l", lwd = 2, col = "white")
   lines(freq, mean_spc, lwd = 2, lty = 2)
@@ -1402,7 +1404,7 @@ mk_white <- function(N) {
 mk_1_over_f_beta <- function(N, beta) {
   # white <- rep(1/N, )
   fs <- seq(0, 0.5, length.out = (N/2))
-  fs[1] <- 0.0001 # avoid infinity 
+  fs[1] <- 0.00001 # avoid infinity 
   one_over_fb <- 1/fs^beta
   return(one_over_fb)
 }
@@ -2149,114 +2151,126 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
                                n = 1, 
                                J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
   
+  line_d <- 1
   ylim <- c(0,2)
   lwd_ts <- 1.5
   rows2plot <- (burn_in_pd+1):(burn_in_pd+num_rows2plt)
-  old <- par(mar = c(2,2,1,1), cex = .7)
+  old <- par(mar = c(3,2,2,1), cex = .7)
   # white noise
   # Label
   print("white")
-  par(fig=c(0, 0.15, 0.80, 1))
+  par(fig=c(0, 0.2, 0.80, 1))
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, "White noise", cex = 1)
+  text(5,5, "White noise", cex = 0.8)
   
   # Generating spectrum
-  par(fig=c(0.15, 0.50, 0.80, 1), new = TRUE)
-  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 1, col="gray")
+  par(fig=c(0.2, 0.55, 0.80, 1), new = TRUE)
+  plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 1), type = "n",
+       xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
+       xaxs = "i", yaxs = "i", yaxt='n')
+  rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 0.2, col="gray")
+  mtext("a", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
   # plot wavelet power spectrum
-  par(fig=c(0.50, 0.85, 0.80, 1), new = TRUE)
+  par(fig=c(0.55, 0.9, 0.80, 1), new = TRUE)
   white.wt <- wt(cbind(1:num_rows2plt, noiseList[[1]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(white.wt)
+  mtext("b", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # Bandpass period 3-4
   # label
   print("cohort")
-  par(fig=c(0, 0.15, 0.60, 0.80), new = TRUE)
+  par(fig=c(0, 0.20, 0.60, 0.80), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, "Period 3-4", cex = 1)
+  text(5,5, "Period 3-4", cex = 0.8)
   
   # Generating spectrum
-  par(fig=c(0.15, 0.50, 0.60, 0.80), new = TRUE)
+  par(fig=c(0.20, 0.55, 0.60, 0.80), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
+       xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
+       xaxs = "i", yaxs = "i", yaxt='n')
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
+  mtext("c", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
   # plot wavelet power spectrum
-  par(fig=c(0.50, 0.85, 0.60, 0.80), new = TRUE)
+  par(fig=c(0.55, 0.9, 0.60, 0.80), new = TRUE)
   p34.wt <- wt(cbind(1:num_rows2plt, noiseList[[2]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34.wt)
+  mtext("d", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10
   # label
   print("low")
-  par(fig=c(0, 0.15, 0.40, 0.60), new = TRUE)
+  par(fig=c(0, 0.2, 0.40, 0.60), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, "Low Frequency", cex = 1)
+  text(5,5, "Low Frequency", cex = 0.8)
   
   # Generating spectrum
-  par(fig=c(0.15, 0.50, 0.40, 0.60), new = TRUE)
+  par(fig=c(0.2, 0.55, 0.40, 0.60), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
+       xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
+       xaxs = "i", yaxs = "i", yaxt='n')
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
+  mtext("e", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
   # plot wavelet power spectrum
-  par(fig=c(0.5, 0.85, 0.40, 0.60), new = TRUE)
+  par(fig=c(0.55, 0.9, 0.40, 0.60), new = TRUE)
   pgt10.wt <- wt(cbind(1:num_rows2plt, noiseList[[3]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(pgt10.wt)
-  
+  mtext("f", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10 and period 3-4
   # label
   print("both")
-  par(fig=c(0, 0.15, 0.2, 0.4), new = TRUE)
+  par(fig=c(0, 0.2, 0.2, 0.4), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, "Both Cohort and\nLow Frequency", cex = 1)
+  text(5,5, "Both Cohort and\nLow Frequency", cex = 0.8)
   
   # Generating spectrum
-  par(fig=c(0.15, 0.50, 0.2, 0.4), new = TRUE)
+  par(fig=c(0.2, 0.55, 0.2, 0.4), new = TRUE)
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
-       xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
-  rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
+       xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
+       xaxs = "i", yaxs = "i", yaxt='n')
+  rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 0.5, col="gray")
+  rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 0.5, col="gray")
+  mtext("g", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
   # plot wavelet power spectrum
-  par(fig=c(0.5, 0.85, 0.2, 0.4), new = TRUE)
+  par(fig=c(0.55, 0.9, 0.2, 0.4), new = TRUE)
   p34gt10.wt <- wt(cbind(1:num_rows2plt, noiseList[[4]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34gt10.wt)
-  
+  mtext("h", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  par(old)
   # one over f noise (beta = 1)
   # label
+  old <- par(mar = c(4,2,2,1), cex = .7)
   print("1/f^b")
-  par(fig=c(0, 0.15, 0, 0.2), new = TRUE)
+  par(fig=c(0, 0.2, 0, 0.2), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 0.8)
   
   # Generating spectrum
-  par(fig=c(0.15, 0.50, 0, 0.2), new = TRUE)
+  par(fig=c(0.2, 0.55, 0, 0.2), new = TRUE)
   Ns <- 50
-  xs <- seq(0,0.5, length = Ns)
+  xs <- seq(0, 0.5, length = Ns)
   ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
   scaled_ys <- 2 * (ys / max(ys[-1]))
-  plot(x = xs[-1], y = scaled_ys[-1], type = "l",
+  int_xy <- approx(xs[-1], scaled_ys[-1], xout = seq(0, 0.5, by = 0.005), rule = 2:2)
+  plot(x = int_xy$x, y = int_xy$y, type = "l",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
-       xaxs = "i", yaxs = "i")
-  polygon(c(xs[-1],rev(xs[-1])),
-          c(rep(0, length = Ns-1), rev(scaled_ys[-1])),
+       xaxs = "i", yaxs = "i", yaxt='n')
+  polygon(c(int_xy$x,rev(int_xy$x)), 
+          c(rep(0, length = length(int_xy$x)), rev(int_xy$y)),
           col="gray")
+  mtext("i", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
   # plot wavelet power spectrum
-  par(fig=c(0.50, 0.85, 0, 0.2), new = TRUE)
+  par(fig=c(0.55, 0.9, 0, 0.2), new = TRUE)
   p_one_over_f.wt <- wt(cbind(1:num_rows2plt, noiseList[[5]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
-  plot(p_one_over_f.wt)
- 
-  par(fig=c(0.3, 1, 0, 1), new = TRUE)
+  plot(p_one_over_f.wt, xlab = "Year")
+  mtext("j", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  
+  par(fig=c(0.4, 1, 0, 1), new = TRUE)
   image.plot(legend.only = TRUE, zlim = c(0,64), add = FALSE) 
   par(old)
   
@@ -2293,6 +2307,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
                               burn_in = burn_in) 
   }
   
+  line_d <- 2.2
   sp_ylim <- c(0, 6000)
   s_yim <- c(0, 1)
   lwd_ts <- 1.5
@@ -2300,7 +2315,7 @@ plot_surv_spawn_ts <- function(spawners = storage,
   rows2plot <- (burn_in_pd+1):(burn_in_pd+num_rows2plt)
   qeT <- 100
   
-  old <- par(mar = c(2,2,1,1), cex = .7)
+  old <- par(mar = c(3,2,1,2), cex = .7)
   
   # white noise
   # Label
@@ -2312,14 +2327,15 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0.80, 1), new = TRUE)
   plot(n_rows, out[[1]][rows2plot, n], type = "l", col = "grey20", lwd = lwd_ts, 
-       ylim = s_yim, xlab = "Time (years)", ylab = "")
+       ylim = s_yim, xlab = "", ylab = "")
+  mtext("a", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # time series plot: spawners 
   par(fig=c(0.60, 1, 0.80, 1), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
-  
+  mtext("b", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   # Bandpass period 3-4
   # label
   print("cohort")
@@ -2330,13 +2346,15 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0.6, 0.8), new = TRUE)
   plot(n_rows, out[[2]][rows2plot, n], type = "l", col = "grey20", lwd = lwd_ts, 
-       ylim = s_yim, xlab = "Time (years)", ylab = "")
+       ylim = s_yim, xlab = "", ylab = "")
+  mtext("c", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.6, 0.8), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  mtext("d", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10
   # label
@@ -2348,13 +2366,15 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0.4, 0.6), new = TRUE)
   plot(n_rows, out[[3]][rows2plot, n], type = "l", col = "grey20", lwd = lwd_ts, 
-       ylim = s_yim, xlab = "Time (years)", ylab = "")
+       ylim = s_yim, xlab = "", ylab = "")
+  mtext("e", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.4, 0.6), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  mtext("f", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10 and period 3-4
   # label
@@ -2366,16 +2386,19 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0.2, 0.4), new = TRUE)
   plot(n_rows, out[[4]][rows2plot, n], type = "l", col = "grey20", lwd = lwd_ts, 
-       ylim = s_yim, xlab = "Time (years)", ylab = "")
+       ylim = s_yim, xlab = "", ylab = "")
+  mtext("g", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.2, 0.4), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
-  
+  mtext("h", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
+  par(old)
   # one over f noise (beta = 1)
   # label
+  old <- par(mar = c(4,2,1,2), cex = .7)
   print("1/f^b")
   par(fig=c(0, 0.2, 0, 0.2), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
@@ -2384,13 +2407,15 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0, 0.2), new = TRUE)
   plot(n_rows, out[[5]][rows2plot, n], type = "l", col = "grey20", lwd = lwd_ts, 
-       ylim = s_yim, xlab = "Time (years)", ylab = "")
+       ylim = s_yim, xlab = "Years", ylab = "")
+  mtext("i", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
   
   # time series plot: spawners
   par(fig=c(0.6, 1, 0, 0.2), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Time (years)", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "Years", ylab = "", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  mtext("j", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   par(old)
   

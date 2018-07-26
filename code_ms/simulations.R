@@ -218,14 +218,15 @@ rm(storageP, french, red_beta_1, rsin_34_gt10_n, rsin_34_n, rsin_gt10_n,
 
 # Fig 2: Plot frequency response at 3 survival levels 
 setEPS()
-postscript(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.eps"), width = 8, height = 6)
-pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 8, height = 6)
-old <- par(mar = c(1,5,1,1))
+# postscript(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "Fig2.ps"), width = 6.85, height = 6.85)
+# pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 6.85, height = 6.85)
+old <- par(mar = c(4,5,1,1))
 plot_dat <- storage[ i = N > 400 & sigPSmult_c == "0.1"]
 plotMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[1]), scale = "CV", yaxis_lim = c(0,4))
-title(xlab = "Frequency")
 linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[2]), line_color = "black", scale = "CV")
 linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[3]), line_color = "grey30", scale = "CV")
+
 legend("topright", legend = c(meanPS[1], meanPS[2], meanPS[3]), lty = c(2,1,1), col = c("black", "black", "grey30"), lwd = 3)
 par(old) 
 dev.off()
@@ -234,9 +235,10 @@ dev.off()
 ## Fig 3 Summary plots of noise signals
 plot_idx <- 1
 
-setEPS()
-postscript(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.ps"), width = 8, height = 6)
-# pdf(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.pdf"), width = 8, height = 6)
+# setEPS()
+# postscript(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "Fig3.ps"), width = 6.85, height = 6.85)
+# pdf(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.pdf"), width = 6.85, height = 6.85)
 plot_gen_freq_wvlt(noise = noiseList,
                    burn_in_pd = burn_in,
                    num_rows2plt = 200,
@@ -247,8 +249,9 @@ dev.off()
 ## Fig 4. Summary plot of spawning female abundance
 
 setEPS()
-postscript(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.ps"), width = 8, height = 6)
-pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
+# postscript(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "/Fig4.ps"), width = 6.85, height = 6.85)
+# pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
                    burn_in_pd = burn_in,
@@ -295,8 +298,9 @@ spectra_names <- c(
 
 ## Make figures
 setEPS()
-postscript(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.ps"), width = 5, height = 8)
-# pdf(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 5, height = 8)
+# postscript(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.ps"), width = 6.85, height = 8)
+postscript(file.path(".", "output_ms", "Fig6.ps"), width = 6.85, height = 8)
+# pdf(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 6.85, height = 8)
 qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.275"]), id = c(1:5)))
 
 x <- ggplot(qet_tmp_sb_m, aes(x = value)) + 
@@ -330,23 +334,25 @@ sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/reps,
 
 spectra_names_qe <- c(
   `white_qe` = "White",
-  `p34_qe` = "Cohort Frequencies",
+  `p34_qe` = "Cohort\nFrequencies",
   `pgt10_qe` = "Low Frequencies",
   `p34gt10_qe` = "Both",
   `one_over_f_qe` = "1/f"
 )
 
 setEPS()
-postscript(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.ps"), 
-           width = 12, height = 9)
-# pdf(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.pdf"), width = 12, height = 9)
+# postscript(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.ps"),
+#            width = 6.85, height = 5.08)
+postscript(file.path(".", "output_ms", "Fig5.ps"),
+           width = 6.85, height = 5.08)
+# pdf(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.pdf"), width = 6.85, height = 5.08)
 pqe_tmp_m <- melt(copy(sb_pQE[ i = alphaMult_c == alphaMult & meanPS_c %in% c(meanPS[1], meanPS[2])]), id = c(1:4))
 x <- ggplot(pqe_tmp_m, aes(x = as.numeric(sigPSmult_c), y = value)) + 
   geom_line(colour = "gray30", size = 1.2) + 
   facet_grid(meanPS_c ~ variable, labeller = labeller(variable = spectra_names_qe)) +
   theme(axis.text = element_text(size = 8, colour = "black")) +
   ylab("Probability of Quasi-Extinction") +
-  xlab(expression(paste(sigma))) +
+  xlab(expression(paste("Standard Deviation of Environment (",  sigma, ", ", y^{-1}, ")" ))) +
   theme_bw()  +
   theme(strip.text.y = element_text(angle = 0)) + 
   theme(strip.background = element_rect(fill="white"))
