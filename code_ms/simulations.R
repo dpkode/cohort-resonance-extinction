@@ -45,11 +45,12 @@ if (!exists(support_dir_name)) dir.create(support_dir_name, recursive = TRUE)
 
 # "fixed" parameters for subsequent noise generation and population modeling
 # number of simulations for each parm combination
-reps <- 1000
+reps <- 200 # 1000
 # length of each simulation
 len_sim <- 2^10
 burn_in <- 400
-N <- burn_in + len_sim
+phasein_len <- 100
+N <- burn_in + len_sim + phasein_len
 
 # Parm combination
 # Frequency response of "population" at three levels of survival for white noise
@@ -164,6 +165,7 @@ parSimCmp <- function(dt,
                       freq_cont = c("white", "p34", "pgt10", "p34gt10", "one_over_f"),  
                       sim_len = len_sim, 
                       burn_in = burn_in, 
+                      phasein_len = phasein_len,
                       surv_mean, 
                       sd_surv, 
                       alpha_mult = 4,
@@ -175,6 +177,7 @@ parSimCmp <- function(dt,
                               mean_surv = as.numeric(surv_mean), 
                               sd_surv = as.numeric(k),
                               sim_len = sim_len,
+                              phasein_len = phasein_len,
                               burn_in = burn_in) 
         for (l in alpha_mult) {
           for (m in EQ_sp) {
@@ -200,8 +203,9 @@ system.time(
     parSimCmp(dt = french[[h]], 
               noise_list = noiseList,
               freq_cont = c("white", "p34", "pgt10", "p34gt10", "one_over_f"),  
-              sim_len = 1024,
+              sim_len = len_sim,
               burn_in = burn_in,
+              phasein_len = phasein_len,
               surv_mean = as.numeric(meanPS[h]), 
               sd_surv = as.numeric(sigPSmult), 
               alpha_mult = 4,
@@ -222,7 +226,8 @@ setEPS()
 postscript(file.path(".", "output_ms", "Fig2.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 6.85, height = 6.85)
 old <- par(mar = c(4,5,1,1))
-plot_dat <- storage[ i = N > 400 & sigPSmult_c == "0.1"]
+plot_dat <- storage[ i = N > (burn_in + phasein_len) & sigPSmult_c == "0.1"]
+# plot_dat <- storage[ i = N > (burn_in) & sigPSmult_c == "0.1"]
 plotMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[1]), scale = "CV", yaxis_lim = c(0,4))
 linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[2]), line_color = "black", scale = "CV")
 linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[3]), line_color = "grey30", scale = "CV")
@@ -240,7 +245,7 @@ plot_idx <- 1
 postscript(file.path(".", "output_ms", "Fig3.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.pdf"), width = 6.85, height = 6.85)
 plot_gen_freq_wvlt(noise = noiseList,
-                   burn_in_pd = burn_in,
+                   burn_in_pd = (burn_in + phasein_len),
                    num_rows2plt = 200,
                    n = plot_idx, 
                    J1 = trunc((log(32/(2 * 1))/log(2))/0.01))
@@ -254,7 +259,7 @@ postscript(file.path(".", "output_ms", "/Fig4.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
-                   burn_in_pd = burn_in,
+                   burn_in_pd = (burn_in + phasein_len),
                    num_rows2plt = 200,
                    sim_len = len_sim,
                    meanSurv = "0.5",
@@ -267,7 +272,7 @@ dev.off()
 QE_sim_len <- 100
 upper_lim <- burn_in + QE_sim_len
 
-storage_sub <- copy(storage[ i = N > burn_in & N <= upper_lim  ])
+storage_sub <- copy(storage[ i = N > (burn_in + phasein_len) & N <= upper_lim  ])
 
 # Fig. 6 CALCULATE QE YEAR -- histogram of QE year ####
 

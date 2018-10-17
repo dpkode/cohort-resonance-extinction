@@ -1617,19 +1617,36 @@ PopProjPSvar <- function(survPS, surv1, surv2, surv3, EQsp, wanted_frac, alpha_s
 #   return(out_dat)
 # }
 
-make_surv_mat <- function(noise_dat, 
-                          mean_surv, 
+# make_surv_mat <- function(noise_dat,
+#                           mean_surv,
+#                           sd_surv,
+#                           sim_len,
+#                           burn_in) {
+#   surv <- matrix(NA, nrow = nrow(noise_dat), ncol = ncol(noise_dat))
+#   surv[1:burn_in, ] <- noise_dat[1:burn_in, ] * 0.01 + mean_surv
+#   surv[(burn_in + 1):(sim_len+burn_in), ] <- noise_dat[(burn_in + 1):(sim_len+burn_in), ] * sd_surv + mean_surv
+#   surv[surv > 1] <- 1
+#   surv[surv < 0] <- 0
+#   return(surv)
+# }
+
+make_surv_mat <- function(noise_dat,
+                          mean_surv,
                           sd_surv,
                           sim_len,
+                          phasein_len,
                           burn_in) {
   surv <- matrix(NA, nrow = nrow(noise_dat), ncol = ncol(noise_dat))
   surv[1:burn_in, ] <- noise_dat[1:burn_in, ] * 0.01 + mean_surv
-  surv[(burn_in + 1):(sim_len+burn_in), ] <- noise_dat[(burn_in + 1):(sim_len+burn_in), ] * sd_surv + mean_surv
+  surv[(burn_in + 1):(phasein_len + burn_in), ] <-
+    noise_dat[(burn_in + 1):(phasein_len + burn_in), ] * seq(0.01, sd_surv, length.out = phasein_len) + mean_surv
+  surv[(burn_in + phasein_len + 1):(sim_len + phasein_len + burn_in), ] <-
+    noise_dat[(burn_in + phasein_len + 1):(sim_len + burn_in + phasein_len), ] * sd_surv + mean_surv
   surv[surv > 1] <- 1
   surv[surv < 0] <- 0
   return(surv)
 }
-  
+
 # make_surv_mat_range <- function(noise_dat, 
 #                           mean_surv, 
 #                           range_surv,
