@@ -780,17 +780,12 @@ customFR2ts <- function(N, # number of time steps
                         reps,
                         r_seed = 1,
                         amp) {
-  # LWB notes on generating time series with a specific 
-  # So, if you want to create white noise (equal variance at all frequencies) 
-  # you should generate a sine wave of frequency .1, .2, .3,....up to the maximum frequency you want, 
-  # then give each one a phase picked from a uniform distribution between 0 and 2 pi, 
-  # then add them together and divide by whatever it takes to get the variance you want.
-  # 
-  # If you instead want to create a series to which salmon would be sensitive do not make 
-  # all of the sine waves the same amplitude, rather make the sine waves near 1/(generation time) 
-  # larger than the others somehow.  One way to do that would be to make them have the a Gaussian shape.
-  # 
-  # Make sense?
+  # To create white noise (equal variance at all frequencies) 
+  # generate a sine waves of frequencies from >0 to up to the maximum frequency 0.5, 
+  # then randomly assign each sine wave a phase picked from a 
+  # uniform distribution between 0 and 2 pi, 
+  # then add them together and normalize or scale to desired time series variance.
+
   
   t <- 1:N # time index
   f <- (1:(N/2))/N # frequencies from 1/N to 0.5
@@ -1637,13 +1632,14 @@ make_surv_mat <- function(noise_dat,
                           phasein_len,
                           burn_in) {
   surv <- matrix(NA, nrow = nrow(noise_dat), ncol = ncol(noise_dat))
-  surv[1:burn_in, ] <- noise_dat[1:burn_in, ] * 0.01 + mean_surv
+  surv[1:burn_in, ] <- noise_dat[1:burn_in, ] * 0.05 + mean_surv
   surv[(burn_in + 1):(phasein_len + burn_in), ] <-
-    noise_dat[(burn_in + 1):(phasein_len + burn_in), ] * seq(0.01, sd_surv, length.out = phasein_len) + mean_surv
+    noise_dat[(burn_in + 1):(phasein_len + burn_in), ] * sd_surv + mean_surv #* seq(0.01, sd_surv, length.out = phasein_len) + mean_surv
   surv[(burn_in + phasein_len + 1):(sim_len + phasein_len + burn_in), ] <-
     noise_dat[(burn_in + phasein_len + 1):(sim_len + burn_in + phasein_len), ] * sd_surv + mean_surv
   surv[surv > 1] <- 1
   surv[surv < 0] <- 0
+  # surv <- apply(surv, 2, detrend)
   return(surv)
 }
 
@@ -2306,6 +2302,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
 plot_surv_spawn_ts <- function(spawners = storage, 
                                noise = noiseList,
                                burn_in_pd,
+                               phasein_len,
                                num_rows2plt = 100,
                                sim_len,
                                meanSurv = "0.5",
@@ -2321,7 +2318,8 @@ plot_surv_spawn_ts <- function(spawners = storage,
                               mean_surv = as.numeric(meanSurv), 
                               sd_surv = as.numeric(sigPSmult),
                               sim_len = sim_len,
-                              burn_in = burn_in) 
+                              burn_in = burn_in,
+                              phasein_len = phasein_len) 
   }
   
   line_d <- 2.2

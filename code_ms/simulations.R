@@ -15,6 +15,7 @@ library(reshape2)
 library(data.table)
 library(fields)
 library(TSA)
+library(RSEIS)
 library(biwavelet)
 library(compiler)
 # load foreach package for parallel processing
@@ -45,11 +46,11 @@ if (!exists(support_dir_name)) dir.create(support_dir_name, recursive = TRUE)
 
 # "fixed" parameters for subsequent noise generation and population modeling
 # number of simulations for each parm combination
-reps <- 200 # 1000
+reps <- 1000
 # length of each simulation
 len_sim <- 2^10
-burn_in <- 400
-phasein_len <- 100
+burn_in <- 2^8
+phasein_len <- 2^4
 N <- burn_in + len_sim + phasein_len
 
 # Parm combination
@@ -179,6 +180,7 @@ parSimCmp <- function(dt,
                               sim_len = sim_len,
                               phasein_len = phasein_len,
                               burn_in = burn_in) 
+        print(surv[1:6, 1:6])
         for (l in alpha_mult) {
           for (m in EQ_sp) {
             dt[i = (sigPSmult_c == k & alphaMult_c == l & EQsp_c == m), 
@@ -227,10 +229,9 @@ postscript(file.path(".", "output_ms", "Fig2.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 6.85, height = 6.85)
 old <- par(mar = c(4,5,1,1))
 plot_dat <- storage[ i = N > (burn_in + phasein_len) & sigPSmult_c == "0.1"]
-# plot_dat <- storage[ i = N > (burn_in) & sigPSmult_c == "0.1"]
-plotMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[1]), scale = "CV", yaxis_lim = c(0,4))
-linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[2]), line_color = "black", scale = "CV")
-linesMeanFR_DTmany(plot_dat, N = 1024, surv = as.numeric(meanPS[3]), line_color = "grey30", scale = "CV")
+plotMeanFR_DTmany(plot_dat, N = len_sim, surv = as.numeric(meanPS[1]), scale = "CV", yaxis_lim = c(0,4))
+linesMeanFR_DTmany(plot_dat, N = len_sim, surv = as.numeric(meanPS[2]), line_color = "black", scale = "CV")
+linesMeanFR_DTmany(plot_dat, N = len_sim, surv = as.numeric(meanPS[3]), line_color = "grey30", scale = "CV")
 
 legend("topright", legend = c(meanPS[1], meanPS[2], meanPS[3]), lty = c(2,1,1), col = c("black", "black", "grey30"), lwd = 3)
 par(old) 
@@ -259,7 +260,8 @@ postscript(file.path(".", "output_ms", "/Fig4.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
-                   burn_in_pd = (burn_in + phasein_len),
+                   burn_in_pd = burn_in,
+                   phasein_len = phasein_len,
                    num_rows2plt = 200,
                    sim_len = len_sim,
                    meanSurv = "0.5",
@@ -270,7 +272,7 @@ dev.off()
 
 # Quasi-extinction metrics
 QE_sim_len <- 100
-upper_lim <- burn_in + QE_sim_len
+upper_lim <- burn_in + phasein_len + QE_sim_len
 
 storage_sub <- copy(storage[ i = N > (burn_in + phasein_len) & N <= upper_lim  ])
 
@@ -306,17 +308,17 @@ setEPS()
 # postscript(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.ps"), width = 6.85, height = 8)
 postscript(file.path(".", "output_ms", "Fig6.ps"), width = 6.85, height = 8)
 # pdf(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 6.85, height = 8)
-qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.275"]), id = c(1:5)))
-
+# qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.3"]), id = c(1:5)))
+qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.3" & meanPS_c == "0.275"]), id = c(1:5)))
 x <- ggplot(qet_tmp_sb_m, aes(x = value)) + 
-  geom_histogram() + 
+  geom_histogram(bins = 25) + 
   facet_grid(variable ~ . , labeller = as_labeller(spectra_names)) +
   xlim(c(0, 100)) +
   xlab("Time (Year)") +
   ylab("Count") +
   theme_bw() +
   theme(strip.text.y = element_text(angle = 0)) + 
-  theme(strip.background = element_rect(fill="white"))
+  theme(strip.background = element_rect(fill="white")) 
 print(x)
 
 dev.off()

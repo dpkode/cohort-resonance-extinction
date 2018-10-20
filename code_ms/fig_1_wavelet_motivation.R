@@ -100,7 +100,8 @@ wavelet_plot <- function(df,
   par(fig = c(0, 1, 0.5, 1))
   old <- par(mar = c(2, 4, 1, 1) )
   plot(df$year, df$PreSpawn, type = "l", lwd = 2, col = "darkgrey",
-       axes = FALSE, ylab = "Survival Rate", xlim = c(2010, 2100), xaxs = "i")
+       axes = FALSE, ylab = "Survival Rate", 
+       xlim = c(2010, 2100), xaxs = "i")
   axis(1, at = c(2010, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100), 
        lab = c(2010, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100), 
        las = 1, cex.axis = 1, tck = 0.02)
@@ -118,7 +119,7 @@ wavelet_plot <- function(df,
   old <- par(mar = c(4, 4, 1, 1) )
   test_cwt <- wt(cbind(df$year, detrend(as.numeric(scale(df$PreSpawn)))), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(test_cwt, type = "power.corr.norm", xaxt = 'n', xlim = c(2010, 2100), 
-       xlab = "Year", ylab = "Period")
+       xlab = "Year", ylab = "Period", lty.coi = 1, lwd.coi = 2)
   axis(1, at = c(2010, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100),
        lab = c(2010, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100),
        las = 1, cex.axis = 1, tck = 0.02)
