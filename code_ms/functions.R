@@ -779,16 +779,19 @@ getSALMODnums <- function(Sdata) {
 customFR2ts <- function(N, # number of time steps
                         reps,
                         r_seed = 1,
-                        amp) {
+                        amp,
+                        freqs = 200) {
   # To create white noise (equal variance at all frequencies) 
   # generate a sine waves of frequencies from >0 to up to the maximum frequency 0.5, 
   # then randomly assign each sine wave a phase picked from a 
   # uniform distribution between 0 and 2 pi, 
   # then add them together and normalize or scale to desired time series variance.
-
+  
+  # freqs: cap the low frequency and limit the number of sine waves
   
   t <- 1:N # time index
-  f <- (1:(N/2))/N # frequencies from 1/N to 0.5
+  # f <- (1:(N/2))/N # frequencies from 1/N to 0.5
+  f <- seq(0.00001, 0.5, length.out = freqs)# frequencies from 1/N to 0.5
   tsReps <- matrix(NA, nrow = N, ncol = reps)
   set.seed(r_seed)
   for (h in 1:reps) {
@@ -1025,7 +1028,8 @@ plotMeanFreqR_DT <- function(dataTable, N, surv, scale = "CV", yaxis_lim = c(0, 
 #   box(lwd=2)
 # }
 
-plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
+plotMeanFR_DTmany <- function(dataTable, N, surv, 
+                              scale = "CV", yaxis_lim) {
   # spectral frequency 
   if (trunc(sqrt(N)) %% 2 == 0) {
     m <- trunc(sqrt(N)) + 1 
@@ -1034,8 +1038,8 @@ plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
   }
   
   spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
-  
   freq <- (1:(N/2))/N
+  
   for (i in 1:ncol(spcMean)) {
     ifelse(all(dataTable[i = reps_c == i & meanPS_c == surv,
                          j = white] == 0), 
@@ -1046,59 +1050,19 @@ plotMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", yaxis_lim) {
                                                                                  j = white]), plot = F )$spec, 
                   spcMean[,i] <- periodogram(scale(dataTable[i = reps_c == i & meanPS_c == surv,
                                                              j = white]), plot = F )$spec ) )
-    
   }
   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
   
-  spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
-  spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
-  spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
-  spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
-  
   if ( !exists("yaxis_lim") ) ifelse(scale == "CV", yaxis_lim <- c(0,1.2*max(mean_spc[which(freq > 0.2)])), yaxis_lim <- c(0, 20))
-  
   plot(freq, mean_spc, type = "n", ylab = "Relative Magnitude", 
        las = 1, ylim = yaxis_lim,
-       main = "Transfer Function", xlab = expression('Frequency' ~ y^-1))
+       xlab = expression('Frequency' ~ y^-1))
   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = "black")
   lines(freq, mean_spc, type = "l", lwd = 2, col = "white")
   lines(freq, mean_spc, lwd = 2, lty = 2)
   
   box(lwd=2)
 }
-
-# linesMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", line_color, AR_col) {
-#   # spectral frequency 
-#   if (trunc(sqrt(N)) %% 2 == 0) {
-#     m <- trunc(sqrt(N)) + 1 
-#   } else {
-#     m <- trunc(sqrt(N))
-#   }
-#   
-#   spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
-#   
-#   freq <- (1:(N/2))/N
-#   for (i in 1:ncol(spcMean)) {
-#     
-#     ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
-#     
-#     ifelse(all(ts == 0), 
-#            spcMean[,i] <- rep(NA, times = N/2),
-#            ifelse(scale == "CV", 
-#                   spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
-#                   spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
-#   }
-#   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
-#   
-#   spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
-#   spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
-#   spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
-#   spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
-#   
-#   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = line_color)
-#   
-#   box(lwd=2)
-# }
 
 linesMeanFR_DTmany <- function(dataTable, N, surv, scale = "CV", line_color) {
   # spectral frequency 
@@ -1392,14 +1356,20 @@ JA_consec <- function(z, qeLev = 100, run_length = 4) {
 
 # create random time series
 # white noise
-mk_white <- function(N) {
-  return(rep(1/N, N/2))
+# mk_white <- function(N) {
+#   return(rep(1/N, N/2))
+# }
+
+mk_white <- function(freq) {
+  # return(rep(1/freq, freq/2))
+  return(rep(1/freq, freq))
 }
 
-mk_1_over_f_beta <- function(N, beta) {
-  # white <- rep(1/N, )
-  fs <- seq(0, 0.5, length.out = (N/2))
-  fs[1] <- 0.00001 # avoid infinity 
+
+mk_1_over_f_beta <- function(N, beta, freq = 200) {
+  # fs <- seq(0, 0.5, length.out = (N/2))
+  # fs[1] <- 0.00001 # avoid infinity 
+  fs <- seq(0.00001, 0.5, length.out = freq)
   one_over_fb <- 1/fs^beta
   return(one_over_fb)
 }
@@ -1408,17 +1378,24 @@ mk_1_over_f_beta <- function(N, beta) {
 mk_rsin <- function(N, lowF, highF) {
   temp <- (1:(N/2))/(N)
   ns <- length(which(temp <= highF & temp >= lowF))
-  # print(ns)
   goodInd <- which(temp <= highF & temp >= lowF)
   temp[-goodInd] <- 0
   temp[goodInd] <- 1/ns
-  #print(temp)
+  return(temp)  }
+
+mk_rsin2 <- function(N, lowF, highF, freq) {
+  temp <- seq(0.00001, 0.5, length.out = freq)
+  ns <- length(which(temp <= highF & temp >= lowF))
+  goodInd <- which(temp <= highF & temp >= lowF)
+  temp[-goodInd] <- 0
+  temp[goodInd] <- 1/ns
   return(temp)  }
 
 # create "band-reject" style time series
 
 mk_rsin_reject <- function(N, lowF, highF) {
-  temp <- (1:(N/2))/(N)
+  # temp <- (1:(N/2))/(N)
+  temp <- seq(0.00001, 0.5, length.out = freq)
   ns <- length(which(temp >= highF & temp <= lowF))
   # print(ns)
   goodInd <- which(temp >= highF & temp <= lowF)
@@ -1632,9 +1609,9 @@ make_surv_mat <- function(noise_dat,
                           phasein_len,
                           burn_in) {
   surv <- matrix(NA, nrow = nrow(noise_dat), ncol = ncol(noise_dat))
-  surv[1:burn_in, ] <- noise_dat[1:burn_in, ] * 0.05 + mean_surv
+  surv[1:burn_in, ] <- 1 # 0.8 # noise_dat[1:burn_in, ] * sd_surv + 0.8
   surv[(burn_in + 1):(phasein_len + burn_in), ] <-
-    noise_dat[(burn_in + 1):(phasein_len + burn_in), ] * sd_surv + mean_surv #* seq(0.01, sd_surv, length.out = phasein_len) + mean_surv
+    noise_dat[(burn_in + 1):(phasein_len + burn_in), ] * sd_surv + mean_surv # seq(0.01, sd_surv, length.out = phasein_len) + mean_surv
   surv[(burn_in + phasein_len + 1):(sim_len + phasein_len + burn_in), ] <-
     noise_dat[(burn_in + phasein_len + 1):(sim_len + burn_in + phasein_len), ] * sd_surv + mean_surv
   surv[surv > 1] <- 1
@@ -2164,7 +2141,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
                                n = 1, 
                                J1 = trunc((log(32/(2 * 1))/log(2))/0.01)) {
   
-  line_d <- 1
+  line_d <- 2
   ylim <- c(0,2)
   lwd_ts <- 1.5
   rows2plot <- (burn_in_pd+1):(burn_in_pd+num_rows2plt)
@@ -2181,6 +2158,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 1), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
        xaxs = "i", yaxs = "i", yaxt='n')
+  axis(2, at = c(0,2), labels = c(0,1))
   rect(xleft = 0, xright  = 0.5, ybottom = 0,  ytop = 0.2, col="gray")
   mtext("a", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
@@ -2188,7 +2166,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   par(fig=c(0.55, 0.9, 0.80, 1), new = TRUE)
   white.wt <- wt(cbind(1:num_rows2plt, noiseList[[1]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(white.wt)
-  mtext("b", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  mtext("b", side = 2, las = 1, at = 1, line = line_d-1, cex = 1.2)
   
   # Bandpass period 3-4
   # label
@@ -2202,6 +2180,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
        xaxs = "i", yaxs = "i", yaxt='n')
+  axis(2, at = c(0,2), labels = c(0,1))
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 1, col="gray")
   mtext("c", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
@@ -2209,7 +2188,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   par(fig=c(0.55, 0.9, 0.60, 0.80), new = TRUE)
   p34.wt <- wt(cbind(1:num_rows2plt, noiseList[[2]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34.wt)
-  mtext("d", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  mtext("d", side = 2, las = 1, at = 1, line = line_d-1, cex = 1.2)
   
   # Bandpass greater than period 10
   # label
@@ -2223,6 +2202,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
        xaxs = "i", yaxs = "i", yaxt='n')
+  axis(2, at = c(0,2), labels = c(0,1))
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 1, col="gray")
   mtext("e", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
   
@@ -2230,7 +2210,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   par(fig=c(0.55, 0.9, 0.40, 0.60), new = TRUE)
   pgt10.wt <- wt(cbind(1:num_rows2plt, noiseList[[3]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(pgt10.wt)
-  mtext("f", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  mtext("f", side = 2, las = 1, at = 1, line = line_d-1, cex = 1.2)
   
   # Bandpass greater than period 10 and period 3-4
   # label
@@ -2244,6 +2224,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   plot(x = seq(0,0.5, length = 50), y = runif(50, min = 0, max = 2), type = "n",
        xlim = c(0,0.5), ylim = ylim, xlab = "", ylab = "",
        xaxs = "i", yaxs = "i", yaxt='n')
+  axis(2, at = c(0,2), labels = c(0,1))
   rect(xleft = 0, xright  = 0.1, ybottom = 0,  ytop = 0.5, col="gray")
   rect(xleft = 0.25, xright  = 0.33, ybottom = 0,  ytop = 0.5, col="gray")
   mtext("g", side = 2, las = 1, at = 2, line = line_d, cex = 1.2)
@@ -2252,7 +2233,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   par(fig=c(0.55, 0.9, 0.2, 0.4), new = TRUE)
   p34gt10.wt <- wt(cbind(1:num_rows2plt, noiseList[[4]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p34gt10.wt)
-  mtext("h", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  mtext("h", side = 2, las = 1, at = 1, line = line_d-1, cex = 1.2)
   par(old)
   # one over f noise (beta = 1)
   # label
@@ -2260,18 +2241,21 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   print("1/f^b")
   par(fig=c(0, 0.2, 0, 0.2), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 0.8)
+  text(5,5, expression(frac(1, sqrt(f))), cex = 1)
+  # text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 0.8)
   
   # Generating spectrum
   par(fig=c(0.2, 0.55, 0, 0.2), new = TRUE)
   Ns <- 50
   xs <- seq(0, 0.5, length = Ns)
-  ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
+  # ys <- mk_1_over_f_beta(N = Ns*2, beta = 1)
+  ys <- mk_1_over_f_beta(N = Ns, beta = 0.5, freq = Ns)
   scaled_ys <- 2 * (ys / max(ys[-1]))
   int_xy <- approx(xs[-1], scaled_ys[-1], xout = seq(0, 0.5, by = 0.005), rule = 2:2)
   plot(x = int_xy$x, y = int_xy$y, type = "l",
        xlim = c(0,0.5), ylim = ylim, xlab = "Frequency", ylab = "",
        xaxs = "i", yaxs = "i", yaxt='n')
+  axis(2, at = c(0,2), labels = c(0,1))
   polygon(c(int_xy$x,rev(int_xy$x)), 
           c(rep(0, length = length(int_xy$x)), rev(int_xy$y)),
           col="gray")
@@ -2281,7 +2265,7 @@ plot_gen_freq_wvlt <- function(noise = noiseList,
   par(fig=c(0.55, 0.9, 0, 0.2), new = TRUE)
   p_one_over_f.wt <- wt(cbind(1:num_rows2plt, noiseList[[5]][rows2plot,n]), dj = 0.01, J1 = J1, max.scale = 32, mother = "morlet", sig.test = 0, sig.level = 0.95)
   plot(p_one_over_f.wt, xlab = "Year")
-  mtext("j", side = 2, las = 1, at = 1, line = line_d, cex = 1.2)
+  mtext("j", side = 2, las = 1, at = 1, line = line_d-1, cex = 1.2)
   
   par(fig=c(0.4, 1, 0, 1), new = TRUE)
   image.plot(legend.only = TRUE, zlim = c(0,64), add = FALSE) 
@@ -2348,8 +2332,10 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: spawners 
   par(fig=c(0.60, 1, 0.80, 1), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = white], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", yaxt = "n", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  axis(side = 2, at = seq(0, sp_ylim[2], by = sp_ylim[2]/2), 
+       labels = seq(0, sp_ylim[2], by = sp_ylim[2]/2))
   mtext("b", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   # Bandpass period 3-4
   # label
@@ -2367,8 +2353,10 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.6, 0.8), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = p34], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", yaxt="n", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  axis(side = 2, at = seq(0, sp_ylim[2], by = sp_ylim[2]/2), 
+       labels = seq(0, sp_ylim[2], by = sp_ylim[2]/2))
   mtext("d", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10
@@ -2387,8 +2375,10 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.4, 0.6), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = pgt10], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", yaxt="n", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  axis(side = 2, at = seq(0, sp_ylim[2], by = sp_ylim[2]/2), 
+       labels = seq(0, sp_ylim[2], by = sp_ylim[2]/2))
   mtext("f", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   # Bandpass greater than period 10 and period 3-4
@@ -2407,8 +2397,10 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: spawners
   par(fig=c(0.6, 1, 0.2, 0.4), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = p34gt10], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "", yaxt="n", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  axis(side = 2, at = seq(0, sp_ylim[2], by = sp_ylim[2]/2), 
+       labels = seq(0, sp_ylim[2], by = sp_ylim[2]/2))
   mtext("h", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   par(old)
   # one over f noise (beta = 1)
@@ -2417,7 +2409,8 @@ plot_surv_spawn_ts <- function(spawners = storage,
   print("1/f^b")
   par(fig=c(0, 0.2, 0, 0.2), new = TRUE)
   plot(1:10, type = "n", axes = F, xlab = "", ylab = "")
-  text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  # text(5,5, expression(1/f^b ~ 'b = 0.5'), cex = 1)
+  text(5,5, expression(frac(1, sqrt(f))), cex = 1)
   
   # time series plot: survival 
   par(fig=c(0.20, 0.60, 0, 0.2), new = TRUE)
@@ -2428,8 +2421,10 @@ plot_surv_spawn_ts <- function(spawners = storage,
   # time series plot: spawners
   par(fig=c(0.6, 1, 0, 0.2), new = TRUE)
   plot(n_rows, spPlot[i = n_rows, j = one_over_f], type = "l", col = "grey20", 
-       lwd = lwd_ts, xlab = "Years", ylab = "", ylim = sp_ylim)
+       lwd = lwd_ts, xlab = "Years", yaxt="n", ylim = sp_ylim)
   abline(h = qeT, col = "black", lty = 2)
+  axis(side = 2, at = seq(0, sp_ylim[2], by = sp_ylim[2]/2), 
+       labels = seq(0, sp_ylim[2], by = sp_ylim[2]/2))
   mtext("j", side = 2, las = 1, at = sp_ylim[2], line = line_d, cex = 1.2)
   
   par(old)
@@ -2794,3 +2789,36 @@ plot_surv_spawn_ts <- function(spawners = storage,
 #   legend("topright", c("white", "wavelet34", "rsw34"), col = c("black", "red", "blue"), lty = 1, lwd = 3, cex = .8)
 # }
 # 
+
+# linesMeanFR_DTmanyAR <- function(dataTable, N, surv, scale = "CV", line_color, AR_col) {
+#   # spectral frequency 
+#   if (trunc(sqrt(N)) %% 2 == 0) {
+#     m <- trunc(sqrt(N)) + 1 
+#   } else {
+#     m <- trunc(sqrt(N))
+#   }
+#   
+#   spcMean <- matrix(NA, nrow = N/2, ncol = length(unique(dataTable$reps_c)))
+#   
+#   freq <- (1:(N/2))/N
+#   for (i in 1:ncol(spcMean)) {
+#     
+#     ts <- as.ts(droplevels(subset(dataTable, reps_c == i & meanPS_c >= surv-0.001 & meanPS_c <= surv+0.001, select = AR_col) ))
+#     
+#     ifelse(all(ts == 0), 
+#            spcMean[,i] <- rep(NA, times = N/2),
+#            ifelse(scale == "CV", 
+#                   spcMean[,i] <- periodogram(ts/mean(ts), plot = F )$spec, 
+#                   spcMean[,i] <- periodogram(scale(ts), plot = F )$spec ) )
+#   }
+#   mean_spc <- rowMeans(spcMean, na.rm = TRUE)
+#   
+#   spc10 <- apply(spcMean, 1, quantile, probs = c(0.1), na.rm = TRUE)
+#   spc25 <- apply(spcMean, 1, quantile, probs = c(0.25), na.rm = TRUE)
+#   spc75 <- apply(spcMean, 1, quantile, probs = c(0.75), na.rm = TRUE)
+#   spc90 <- apply(spcMean, 1, quantile, probs = c(0.9), na.rm = TRUE)
+#   
+#   lines(freq, mean_spc, type = "l", lwd = 3.7, lty = 1, col = line_color)
+#   
+#   box(lwd=2)
+# }

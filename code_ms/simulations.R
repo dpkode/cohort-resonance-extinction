@@ -44,13 +44,14 @@ if (!exists(support_dir_name)) dir.create(support_dir_name, recursive = TRUE)
 
 ##  params
 
-# "fixed" parameters for subsequent noise generation and population modeling
+# parameters for subsequent noise generation and population modeling
 # number of simulations for each parm combination
-reps <- 1000
+reps <- 1e3
 # length of each simulation
 len_sim <- 2^10
-burn_in <- 2^8
-phasein_len <- 2^4
+burn_in <- 1e2
+n_freqs <- 2^9
+phasein_len <- 0 # 2^4
 N <- burn_in + len_sim + phasein_len
 
 # Parm combination
@@ -59,7 +60,7 @@ alphaMult <- 4
 EQsp <- 7500
 # Set mean survival and bounds/range 
 meanPS <- as.character(c(0.275, 0.5, 0.8))
-sigPSmult <- as.character(seq(0.1, 0.5, by = 0.05))
+sigPSmult <- as.character(seq(0.1, 0.5, by = 0.1))
 
 freqCont <- c("white", "p34", "pgt10", "p34gt10", "one_over_f")
 surv1 <- 0.02 # first year ocean survival
@@ -92,26 +93,35 @@ sps_mults <- seq(1.1, 1.5, by = 0.1) #seq(1.1, 1.5, by = 0.2)
 white_n <- customFR2ts(N = N, # number of time steps
                        reps = reps,
                        r_seed = r_seed,
-                       amp = mk_white(N)) # mean = 0, variance/sd = 1
+                       amp = mk_white(freq = n_freqs),
+                       freq = n_freqs) # mean = 0, variance/sd = 1
 
 # Filtered/selected bandwidths
 
 # Bandpass period 3-4 (frequencies 1/4 to 1/3) in white noise signals.
 
+# rsin_34_n <- customFR2ts(N = N, # number of time steps
+#                          reps = reps,
+#                          r_seed = r_seed,
+#                          amp = mk_rsin(N, highF=1/3, lowF=1/4)) 
+
 rsin_34_n <- customFR2ts(N = N, # number of time steps
                          reps = reps,
                          r_seed = r_seed,
-                         amp = mk_rsin(N, highF=1/3, lowF=1/4)) 
+                         amp = mk_rsin2(N, highF=1/3, lowF=1/4, freq = n_freqs),
+                         freq = n_freqs) 
 
 rsin_gt10_n <- customFR2ts(N = N,
                            reps = reps,
                            r_seed = r_seed,
-                           amp = mk_rsin(N, lowF=0, highF=1/10) ) 
+                           amp = mk_rsin2(N, lowF=0, highF=1/10, freq = n_freqs),
+                           freq = n_freqs) 
 
 red_beta_1 <- customFR2ts(N = N, # number of time steps
                           reps = reps,
                           r_seed = r_seed,
-                          amp = mk_1_over_f_beta(N, beta = .5)) 
+                          amp = mk_1_over_f_beta(N, beta = .5, freq = n_freqs),
+                          freq = n_freqs) 
 
 # Band-pass greater than period 10 and period 3-4 (frequencies lower than 0.1 plus period 3-4)
 # By adding the period 10 and greater noise to the period 3-4 only noise (divide by 2) 
@@ -127,8 +137,6 @@ noiseList <- list(noise_white = white_n,
                   noise_gt10 = rsin_gt10_n,
                   noise_34gt10 = rsin_34_gt10_n,
                   noise_red_beta_1 = red_beta_1)
-
-
 
 ## Create data.table to store simulation results
 
@@ -180,7 +188,6 @@ parSimCmp <- function(dt,
                               sim_len = sim_len,
                               phasein_len = phasein_len,
                               burn_in = burn_in) 
-        print(surv[1:6, 1:6])
         for (l in alpha_mult) {
           for (m in EQ_sp) {
             dt[i = (sigPSmult_c == k & alphaMult_c == l & EQsp_c == m), 
@@ -225,7 +232,7 @@ rm(storageP, french, red_beta_1, rsin_34_gt10_n, rsin_34_n, rsin_gt10_n,
 # Fig 2: Plot frequency response at 3 survival levels 
 setEPS()
 # postscript(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.ps"), width = 6.85, height = 6.85)
-postscript(file.path(".", "output_ms", "Fig2.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "Fig2revised_100.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "Fig_2_white_noise_popFreqResp_with_TimeSeries_CV.pdf"), width = 6.85, height = 6.85)
 old <- par(mar = c(4,5,1,1))
 plot_dat <- storage[ i = N > (burn_in + phasein_len) & sigPSmult_c == "0.1"]
@@ -239,11 +246,11 @@ dev.off()
 
 
 ## Fig 3 Summary plots of noise signals
-plot_idx <- 1
+plot_idx <- 2
 
 # setEPS()
 # postscript(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.ps"), width = 6.85, height = 6.85)
-postscript(file.path(".", "output_ms", "Fig3.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "Fig3revised_100.ps"), width = 6.85, height = 6.85)
 # pdf(file.path(".", "output_ms", "Fig_3_summaryFreqContTS_Noise.pdf"), width = 6.85, height = 6.85)
 plot_gen_freq_wvlt(noise = noiseList,
                    burn_in_pd = (burn_in + phasein_len),
@@ -256,7 +263,7 @@ dev.off()
 
 setEPS()
 # postscript(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.ps"), width = 6.85, height = 6.85)
-postscript(file.path(".", "output_ms", "/Fig4.ps"), width = 6.85, height = 6.85)
+postscript(file.path(".", "output_ms", "/Fig4revised_100.ps"), width = 8, height = 8)
 # pdf(file.path(".", "output_ms", "/Fig_4_summaryFreqContTS_SpawningFemales.pdf"), width = 8, height = 6)
 plot_surv_spawn_ts(spawners = storage,
                    noise = noiseList,
@@ -291,7 +298,7 @@ sb_qeyr <- calcQEyr(dt = storage_sub, expr = list( as.integer(JA_consec(white, r
                                                    as.integer(JA_consec(p34gt10, run_length = 4, qeLev = qe_lev)),
                                                    as.integer(JA_consec(one_over_f, run_length = 4, qeLev = qe_lev)))) 
 
-# need to name the new columns
+# set names of the new columns
 setnames(sb_qeyr, c("V1", "V2", "V3", "V4", "V5"),
          c("white", "p34", "pgt10", "p34gt10", "one_over_f"))
 
@@ -300,16 +307,16 @@ spectra_names <- c(
   `p34` = "Cohort Frequencies",
   `pgt10` = "Low Frequencies",
   `p34gt10` = "Both",
-  `one_over_f` = "1/f"
+  `one_over_f` = "1/f^0.5"
 )
 
 ## Make figures
 setEPS()
 # postscript(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.ps"), width = 6.85, height = 8)
-postscript(file.path(".", "output_ms", "Fig6.ps"), width = 6.85, height = 8)
+postscript(file.path(".", "output_ms", "Fig6revised_100.ps"), width = 6.85, height = 8)
 # pdf(file.path(".", "output_ms", "Fig_6_Surv_Freq_QE_time_Dist_lowSurv.pdf"), width = 6.85, height = 8)
 # qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & N > 400 & meanPS_c == "0.3"]), id = c(1:5)))
-qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.3" & meanPS_c == "0.275"]), id = c(1:5)))
+qet_tmp_sb_m <- as.data.table(melt(copy(sb_qeyr[ i = sigPSmult_c == "0.4" & meanPS_c == "0.275"]), id = c(1:5)))
 x <- ggplot(qet_tmp_sb_m, aes(x = value)) + 
   geom_histogram(bins = 25) + 
   facet_grid(variable ~ . , labeller = as_labeller(spectra_names)) +
@@ -338,19 +345,18 @@ sb_pQE <- calc_pQE(sb_qeyr, list(white_qe = length(which(!is.na(white)))/reps,
                                  p34gt10_qe = length(which(!is.na(p34gt10)))/reps,
                                  one_over_f_qe = length(which(!is.na(one_over_f)))/reps))
 
-
 spectra_names_qe <- c(
   `white_qe` = "White",
   `p34_qe` = "Cohort\nFrequencies",
   `pgt10_qe` = "Low Frequencies",
   `p34gt10_qe` = "Both",
-  `one_over_f_qe` = "1/f"
+  `one_over_f_qe` = "1/f^0.5"# "1/f"
 )
 
 setEPS()
 # postscript(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.ps"),
 #            width = 6.85, height = 5.08)
-postscript(file.path(".", "output_ms", "Fig5.ps"),
+postscript(file.path(".", "output_ms", "Fig5revised_100.ps"),
            width = 6.85, height = 5.08)
 # pdf(file.path(".", "output_ms", "Fig_5_sigma_vs_pQE2row.pdf"), width = 6.85, height = 5.08)
 pqe_tmp_m <- melt(copy(sb_pQE[ i = alphaMult_c == alphaMult & meanPS_c %in% c(meanPS[1], meanPS[2])]), id = c(1:4))
