@@ -2,5 +2,3 @@ packrat/lib*/
 .Rproj.user
 *.pdf
 *.ps
-data/*
-output/*
